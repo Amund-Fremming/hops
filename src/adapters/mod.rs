@@ -1,2 +1,3 @@
-pub mod auth0;
+pub mod auth;
 pub mod comms;
+pub mod user;

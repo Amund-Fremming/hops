@@ -1,2 +1,3 @@
 pub mod adapters;
-pub mod features;
+pub mod domain;
+pub mod ports;

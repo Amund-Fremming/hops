@@ -23,4 +23,10 @@ src/
 - add runtime var, so if local you use dryrun in the sms stuff so you do not really send
 - traits under adapters file, use these in the app state
 - use repos inside services and then inejct into state?
+
+### TODO - IDP
+
+- rate limiting with tower governor
+- lock recovery med otp?
+
 # hops

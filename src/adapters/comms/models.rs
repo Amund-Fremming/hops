@@ -7,6 +7,7 @@ pub struct SendSmsRequest {
     pub message: String,
 }
 
+/// Response object from `Elks46`
 #[derive(Debug, Deserialize)]
 pub struct SendSmsResponse {
     pub status: String,
