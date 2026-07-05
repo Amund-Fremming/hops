@@ -1,4 +1,6 @@
-use crate::ports::auth_port::AuthPort;
+use async_trait::async_trait;
+
+use crate::{domain::error::ServerError, ports::auth_port::AuthPort};
 
 pub struct JwtAdapter {
     base_url: String,
@@ -16,8 +18,13 @@ impl JwtAdapter {
     }
 }
 
+#[async_trait]
 impl AuthPort for JwtAdapter {
-    fn login(&self, _email: &str, _password: &str) -> Result<String, String> {
+    async fn login(&self, phone: &str, password: &str) -> Result<String, ServerError> {
+        todo!()
+    }
+
+    async fn rotate_tokens(&self) -> Result<String, ServerError> {
         todo!()
     }
 }

@@ -1,13 +1,16 @@
+use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::domain::user::User;
 use crate::ports::user_repository::UserRepository;
 
-pub struct PostgresUserRepository;
+pub struct PostgresUserRepository {
+    pool: Pool<Postgres>,
+}
 
 impl PostgresUserRepository {
-    pub fn new() -> Self {
-        Self
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool }
     }
 }
 
