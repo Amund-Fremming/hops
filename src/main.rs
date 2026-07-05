@@ -15,11 +15,15 @@ async fn health() -> Json<HealthResponse> {
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("hops=info".parse().unwrap()))
         .init();
 
     let app = Router::new().route("/health", get(health));
+
+    // TODO - connect db, run mig, setup app state. App state should take in ports only, they should be created here, single entry point for change if needed later
 
     let server_cfg = CONFIG.server.clone();
     let addr = format!("{}:{}", server_cfg.address, server_cfg.port);
