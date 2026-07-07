@@ -1,7 +1,9 @@
 use async_trait::async_trait;
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::{adapters::auth::models::Jwks, domain::error::ServerError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
@@ -10,24 +12,38 @@ pub struct TokenResponse {
     pub expires_in: i64,
 }
 
-#[derive(Debug)]
-pub enum AuthError {
-    InvalidCredentials,
-    TokenExpired,
-    RateLimited,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub iss: String,
+    pub sub: String,
+    pub aud: Vec<String>,
+    pub exp: usize,
+    pub iat: usize,
 }
 
 #[async_trait]
 pub trait AuthPort: Send + Sync {
-    fn verify_token(&self, token: &str, public_key: &str) -> Result<bool, AuthError>;
+    fn get_jwks(&self) -> &Jwks;
 
-    fn get_decoding_key(&self, public_key: &str) -> Result<DecodingKey, AuthError>;
+    fn validate_token(&self, token: &str) -> Result<Claims, StatusCode>;
 
-    fn get_encoding_key(&self, public_key: &str) -> Result<EncodingKey, AuthError>;
+    fn generate_tokens(&self, user_id: Uuid) -> Result<TokenResponse, ServerError>;
 
-    async fn authenticate(&self, phone: &str, password: &str) -> Result<TokenResponse, AuthError>;
+    async fn authenticate(&self, phone: &str, password: &str)
+    -> Result<TokenResponse, ServerError>;
 
-    async fn issue_token(&self, user_id: Uuid) -> Result<TokenResponse, AuthError>;
+    async fn get_identities(&self, user_id: Uuid) -> Result<Vec<String>, ServerError>;
 
-    async fn rotate_tokens(&self) -> Result<String, AuthError>;
+    async fn set_password(
+        &self,
+        user_id: Uuid,
+        old_password: &str,
+        new_password: &str,
+    ) -> Result<(), ServerError>;
+
+    async fn rotate_tokens(&self, refresh_token: &str) -> Result<TokenResponse, ServerError>;
+
+    async fn increment_failed_attempts(&self, user_id: Uuid) -> Result<(), ServerError>;
+
+    async fn reset_failed_attempts(&self, user_id: Uuid) -> Result<(), ServerError>;
 }

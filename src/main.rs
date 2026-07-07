@@ -38,13 +38,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let audit_repository = Arc::new(PostgresAuditRepository::new(pool.clone()));
     let auth_repository = Arc::new(PostgresAuthRepository::new(pool.clone()));
 
-    let auth = Arc::new(JwtAdapter::new(auth_repository));
+    let auth = Arc::new(JwtAdapter::new(
+        auth_repository,
+        CONFIG.auth.private_key_pem(),
+        CONFIG.auth.public_key_pem(),
+        &CONFIG.auth.audience,
+        &CONFIG.auth.issuer,
+    )?);
     let comms = Arc::new(CommsAdapter::new(
         CONFIG.comms.username.clone(),
         CONFIG.comms.password.clone(),
     ));
 
-    let app_state = Arc::new(AppState::new(user_repository, audit_repository, auth, comms));
+    let app_state = Arc::new(AppState::new(
+        user_repository,
+        audit_repository,
+        auth,
+        comms,
+    ));
 
     let app = app_routes(app_state);
 

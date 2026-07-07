@@ -5,7 +5,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use reqwest::StatusCode;
+use reqwest::{StatusCode, header::AUTHORIZATION};
 
 use crate::domain::state::AppState;
 
@@ -14,5 +14,15 @@ pub(crate) async fn auth_mw(
     mut req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    let token = req
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let claims = state.auth.validate_token(token)?;
+
+    req.extensions_mut().insert(claims);
     Ok(next.run(req).await)
 }

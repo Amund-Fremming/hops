@@ -7,6 +7,12 @@ pub enum ServerError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
+    #[error("RSA error: {0}")]
+    RSA(#[from] rsa::pkcs8::spki::Error),
+
+    #[error("Auth error: {0}")]
+    Auth(String),
+
     #[error("Not found")]
     NotFound,
 
@@ -26,6 +32,17 @@ impl IntoResponse for ServerError {
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Database error".to_string(),
                 )
+            }
+            Self::RSA(err) => {
+                error!("RSA error: {}", err);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Cryptographic error".to_string(),
+                )
+            }
+            Self::Auth(msg) => {
+                warn!("Auth error: {}", msg);
+                (StatusCode::UNAUTHORIZED, msg)
             }
             Self::NotFound => {
                 warn!("Resource not found");
