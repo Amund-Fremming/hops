@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::domain::error::ServerError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Audit {
     pub id: Uuid,
@@ -28,17 +30,11 @@ pub struct AuditQuery {
     pub offset: Option<u64>,
 }
 
-#[derive(Debug)]
-pub enum AuditRepoError {
-    NotFound,
-    DatabaseError(String),
-}
-
 #[async_trait]
 pub trait AuditRepository: Send + Sync {
-    async fn create(&self, audit: Audit) -> Result<Audit, AuditRepoError>;
+    async fn create(&self, audit: Audit) -> Result<Audit, ServerError>;
 
-    async fn find(&self, query: AuditQuery) -> Result<Vec<Audit>, AuditRepoError>;
+    async fn find(&self, query: AuditQuery) -> Result<Vec<Audit>, ServerError>;
 
-    async fn delete_older_than(&self, days: i64) -> Result<u64, AuditRepoError>;
+    async fn delete_older_than(&self, days: i64) -> Result<u64, ServerError>;
 }

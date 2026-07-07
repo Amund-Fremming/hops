@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use sqlx::{Pool, Postgres};
 
-use crate::ports::audit_repository::{Audit, AuditQuery, AuditRepoError, AuditRepository};
+use crate::domain::error::ServerError;
+use crate::ports::audit_repository::{Audit, AuditQuery, AuditRepository};
 
 pub struct PostgresAuditRepository {
     pool: Pool<Postgres>,
@@ -15,15 +16,15 @@ impl PostgresAuditRepository {
 
 #[async_trait]
 impl AuditRepository for PostgresAuditRepository {
-    async fn create(&self, _audit: Audit) -> Result<Audit, AuditRepoError> {
+    async fn create(&self, _audit: Audit) -> Result<Audit, ServerError> {
         todo!()
     }
 
-    async fn find(&self, _query: AuditQuery) -> Result<Vec<Audit>, AuditRepoError> {
+    async fn find(&self, _query: AuditQuery) -> Result<Vec<Audit>, ServerError> {
         todo!()
     }
 
-    async fn delete_older_than(&self, _days: i64) -> Result<u64, AuditRepoError> {
+    async fn delete_older_than(&self, _days: i64) -> Result<u64, ServerError> {
         todo!()
     }
 }

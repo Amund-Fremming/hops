@@ -15,8 +15,7 @@ impl PostgresDatabase {
             .max_connections(5)
             .idle_timeout(Duration::from_secs(30))
             .connect(connection_string)
-            .await
-            .map_err(|e| ServerError::Database(e.to_string()))?;
+            .await?;
 
         Ok(Self { pool })
     }
@@ -25,7 +24,7 @@ impl PostgresDatabase {
         sqlx::migrate!("./migrations")
             .run(&self.pool)
             .await
-            .map_err(|e| ServerError::Database(e.to_string()))?;
+            .map_err(|e| ServerError::Database(e.into()))?;
 
         Ok(())
     }
