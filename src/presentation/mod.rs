@@ -4,6 +4,7 @@ use axum::{
     Json, Router, extract::State, middleware as axum_mw, response::IntoResponse, routing::get,
 };
 use serde_json::json;
+use tower_http::trace::TraceLayer;
 
 use crate::{
     domain::state::AppState,
@@ -37,5 +38,8 @@ pub fn app_routes(state: Arc<AppState>) -> Router {
         .nest("/audit", audit_routes(state.clone()))
         .layer(axum_mw::from_fn_with_state(state, auth_mw));
 
-    Router::new().merge(public_routes).merge(protected_routes)
+    Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
+        .layer(TraceLayer::new_for_http())
 }

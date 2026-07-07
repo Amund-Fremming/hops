@@ -22,7 +22,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("hops=info".parse().unwrap()))
+        .with_env_filter(
+            EnvFilter::from_default_env()
+                .add_directive("hops=info".parse().unwrap())
+                .add_directive("tower_http=debug".parse().unwrap()),
+        )
         .init();
 
     // TODO - connect db, run mig, setup app state. App state should take in ports only, they should be created here, single entry point for change if needed later
