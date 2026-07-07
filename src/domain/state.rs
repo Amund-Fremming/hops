@@ -1,19 +1,30 @@
 use std::sync::Arc;
 
-use crate::{
-    domain::error::ServerError,
-    ports::{auth_port::AuthPort, comms_port::CommsPort, user_repository::UserRepository},
+use crate::ports::{
+    audit_repository::AuditRepository, auth_port::AuthPort, comms_port::CommsPort,
+    user_repository::UserRepository,
 };
 
 #[derive(Clone)]
 pub struct AppState {
-    user_repo: Arc<dyn UserRepository>,
-    comms: Arc<dyn CommsPort>,
-    auth: Arc<dyn AuthPort>,
+    pub user_repository: Arc<dyn UserRepository>,
+    pub audit_repository: Arc<dyn AuditRepository>,
+    pub comms: Arc<dyn CommsPort>,
+    pub auth: Arc<dyn AuthPort>,
 }
 
 impl AppState {
-    pub fn new() -> Result<Self, ServerError> {
-        todo!();
+    pub fn new(
+        user_repository: Arc<dyn UserRepository>,
+        audit_repository: Arc<dyn AuditRepository>,
+        auth: Arc<dyn AuthPort>,
+        comms: Arc<dyn CommsPort>,
+    ) -> Self {
+        Self {
+            user_repository,
+            audit_repository,
+            auth,
+            comms,
+        }
     }
 }

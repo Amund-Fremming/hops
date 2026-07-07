@@ -14,9 +14,16 @@ pub struct DatabaseConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct CommsConfig {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
+    pub comms: CommsConfig,
 }
 
 impl AppConfig {

@@ -1,8 +1,9 @@
+use async_trait::async_trait;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::domain::user::User;
-use crate::ports::user_repository::UserRepository;
+use crate::ports::user_repository::{UserRepoError, UserRepository};
 
 pub struct PostgresUserRepository {
     pool: Pool<Postgres>,
@@ -14,24 +15,25 @@ impl PostgresUserRepository {
     }
 }
 
+#[async_trait]
 impl UserRepository for PostgresUserRepository {
-    fn get_user(&self, _id: Uuid) -> Option<User> {
+    async fn get_user(&self, _id: Uuid) -> Result<Option<User>, UserRepoError> {
+        Ok(None)
+    }
+
+    async fn get_all_users(&self) -> Result<Vec<User>, UserRepoError> {
         todo!()
     }
 
-    fn get_all_users(&self) -> Vec<User> {
+    async fn create_user(&self, _user: User) -> Result<User, UserRepoError> {
         todo!()
     }
 
-    fn create_user(&self, _user: User) -> User {
+    async fn update_user(&self, _user: User) -> Result<User, UserRepoError> {
         todo!()
     }
 
-    fn update_user(&self, _user: User) -> Option<User> {
-        todo!()
-    }
-
-    fn delete_user(&self, _id: Uuid) -> bool {
+    async fn delete_user(&self, _id: Uuid) -> Result<bool, UserRepoError> {
         todo!()
     }
 }

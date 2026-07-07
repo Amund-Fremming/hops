@@ -1,11 +1,20 @@
+use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::domain::user::User;
 
-pub trait UserRepository {
-    fn get_user(&self, id: Uuid) -> Option<User>;
-    fn get_all_users(&self) -> Vec<User>;
-    fn create_user(&self, user: User) -> User;
-    fn update_user(&self, user: User) -> Option<User>;
-    fn delete_user(&self, id: Uuid) -> bool;
+#[derive(Debug)]
+pub enum UserRepoError {
+    NotFound,
+    Conflict,
+    DatabaseError(String),
+}
+
+#[async_trait]
+pub trait UserRepository: Send + Sync {
+    async fn get_user(&self, id: Uuid) -> Result<Option<User>, UserRepoError>;
+    async fn get_all_users(&self) -> Result<Vec<User>, UserRepoError>;
+    async fn create_user(&self, user: User) -> Result<User, UserRepoError>;
+    async fn update_user(&self, user: User) -> Result<User, UserRepoError>;
+    async fn delete_user(&self, id: Uuid) -> Result<bool, UserRepoError>;
 }

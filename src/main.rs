@@ -1,35 +1,58 @@
-use axum::{Json, Router, routing::get};
-use hops::config::{AppConfig, CONFIG};
-use serde::Serialize;
+use hops::{
+    adapters::{
+        auth::adapter::JwtAdapter,
+        comms::adapter::CommsAdapter,
+        postgres::{
+            audit_repository::PostgresAuditRepository, auth_repository::PostgresAuthRepository,
+            user_repository::PostgresUserRepository,
+        },
+    },
+    config::CONFIG,
+    domain::state::AppState,
+    presentation::app_routes,
+};
+use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-#[derive(Serialize)]
-struct HealthResponse {
-    health: &'static str,
-}
-
-async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse { health: "OK" })
-}
-
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("hops=info".parse().unwrap()))
         .init();
 
-    let app = Router::new().route("/health", get(health));
-
     // TODO - connect db, run mig, setup app state. App state should take in ports only, they should be created here, single entry point for change if needed later
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .acquire_timeout(Duration::from_secs(5))
+        .idle_timeout(Duration::from_secs(600))
+        .max_lifetime(Duration::from_secs(1800))
+        .connect(&CONFIG.database.url)
+        .await?;
 
-    let server_cfg = CONFIG.server.clone();
-    let addr = format!("{}:{}", server_cfg.address, server_cfg.port);
+    let user_repository = Arc::new(PostgresUserRepository::new(pool.clone()));
+    let audit_repository = Arc::new(PostgresAuditRepository::new(pool.clone()));
+    let auth_repository = Arc::new(PostgresAuthRepository::new(pool.clone()));
+
+    let auth = Arc::new(JwtAdapter::new(auth_repository));
+    let comms = Arc::new(CommsAdapter::new(
+        CONFIG.comms.username.clone(),
+        CONFIG.comms.password.clone(),
+    ));
+
+    let app_state = Arc::new(AppState::new(user_repository, audit_repository, auth, comms));
+
+    let app = app_routes(app_state);
+
+    let addr = format!("{}:{}", CONFIG.server.address, CONFIG.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
     info!("Server running on http://{}", addr);
 
     axum::serve(listener, app).await.unwrap();
+    Ok(())
 }

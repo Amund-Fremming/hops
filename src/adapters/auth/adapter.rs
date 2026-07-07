@@ -1,30 +1,44 @@
 use async_trait::async_trait;
+use jsonwebtoken::{DecodingKey, EncodingKey};
+use std::sync::Arc;
+use uuid::Uuid;
 
-use crate::{domain::error::ServerError, ports::auth_port::AuthPort};
+use crate::ports::auth_port::{AuthError, AuthPort, TokenResponse};
+use crate::ports::auth_repository::AuthRepository;
 
 pub struct JwtAdapter {
-    base_url: String,
-    client_id: String,
-    client_secret: String,
+    repo: Arc<dyn AuthRepository>,
 }
 
 impl JwtAdapter {
-    pub fn new(base_url: String, client_id: String, client_secret: String) -> Self {
-        Self {
-            base_url,
-            client_id,
-            client_secret,
-        }
+    pub fn new(repo: Arc<dyn AuthRepository>) -> Self {
+        Self { repo }
     }
 }
 
 #[async_trait]
 impl AuthPort for JwtAdapter {
-    async fn login(&self, phone: &str, password: &str) -> Result<String, ServerError> {
+    fn verify_token(&self, token: &str, public_key: &str) -> Result<bool, AuthError> {
         todo!()
     }
 
-    async fn rotate_tokens(&self) -> Result<String, ServerError> {
+    fn get_decoding_key(&self, public_key: &str) -> Result<DecodingKey, AuthError> {
+        todo!()
+    }
+
+    fn get_encoding_key(&self, public_key: &str) -> Result<EncodingKey, AuthError> {
+        todo!()
+    }
+
+    async fn authenticate(&self, phone: &str, password: &str) -> Result<TokenResponse, AuthError> {
+        todo!()
+    }
+
+    async fn issue_token(&self, user_id: Uuid) -> Result<TokenResponse, AuthError> {
+        todo!()
+    }
+
+    async fn rotate_tokens(&self) -> Result<String, AuthError> {
         todo!()
     }
 }
