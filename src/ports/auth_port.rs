@@ -21,6 +21,14 @@ pub struct Claims {
     pub iat: usize,
 }
 
+impl Claims {
+    pub fn user_id(&self) -> Result<Uuid, ServerError> {
+        self.sub
+            .parse::<Uuid>()
+            .map_err(|e| ServerError::Auth(format!("Invalid user_id in token: {}", e)))
+    }
+}
+
 #[async_trait]
 pub trait AuthPort: Send + Sync {
     fn get_jwks(&self) -> &Jwks;

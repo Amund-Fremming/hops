@@ -1,26 +1,23 @@
 use std::sync::Arc;
 
-use axum::{
-    Json, Router,
-    extract::{Path, State},
-    response::IntoResponse,
-    routing::get,
-};
+use axum::{Extension, Json, Router, extract::State, response::IntoResponse, routing::get};
 use reqwest::StatusCode;
-use uuid::Uuid;
 
-use crate::domain::{error::ServerError, state::AppState};
+use crate::{
+    domain::{error::ServerError, state::AppState},
+    ports::auth_port::Claims,
+};
 
 pub fn user_routes(state: Arc<AppState>) -> Router {
-    Router::new()
-        .route("/{user_id}", get(get_user))
-        .with_state(state)
+    Router::new().route("/me", get(me)).with_state(state)
 }
 
-async fn get_user(
+async fn me(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
 ) -> Result<impl IntoResponse, ServerError> {
+    let user_id = claims.user_id()?;
+
     match state.user_repository.get_user(user_id).await? {
         Some(user) => Ok((StatusCode::OK, Json(user))),
         None => Err(ServerError::NotFound),

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use axum::{Router, extract::State, response::IntoResponse, routing::post};
+use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
+use reqwest::StatusCode;
 
-use crate::domain::{error::ServerError, state::AppState};
+use crate::domain::{error::ServerError, state::AppState, user::LoginRequest};
 
 pub fn auth_routes(state: Arc<AppState>) -> Router {
     Router::new()
@@ -13,7 +14,12 @@ pub fn auth_routes(state: Arc<AppState>) -> Router {
 
 async fn authenticate(
     State(state): State<Arc<AppState>>,
+    Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    todo!();
-    Ok(())
+    let token_response = state
+        .auth
+        .authenticate(&req.username, &req.password)
+        .await?;
+
+    Ok((StatusCode::OK, Json(token_response)))
 }
