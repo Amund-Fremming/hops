@@ -6,6 +6,7 @@ use axum::{
     response::Response,
 };
 use reqwest::{StatusCode, header::AUTHORIZATION};
+use tracing::warn;
 
 use crate::domain::state::AppState;
 
@@ -18,8 +19,12 @@ pub(crate) async fn auth_mw(
         .headers()
         .get(AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+        .and_then(|h| h.strip_prefix("Bearer "));
+
+    let Some(token) = token else {
+        warn!("Missing or invalid Authorization header");
+        return Err(StatusCode::UNAUTHORIZED);
+    };
 
     let claims = state.auth.validate_token(token)?;
 

@@ -4,3 +4,7 @@ port = 8080
 
 [database]
 url = "postgres://postgres:password@postgres:5432/storage"
+
+[auth]
+audience = "hops"
+issuer = "hops"
