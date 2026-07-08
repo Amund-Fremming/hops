@@ -4,19 +4,40 @@ use rsa::{RsaPublicKey, pkcs8::DecodePublicKey, traits::PublicKeyParts};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::error::ServerError;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub iss: String,
+    pub sub: String,
+    pub aud: Vec<String>,
+    pub exp: usize,
+    pub iat: usize,
+}
+
+impl Claims {
+    pub fn user_id(&self) -> Result<Uuid, ServerError> {
+        self.sub
+            .parse::<Uuid>()
+            .map_err(|e| ServerError::Auth(format!("Invalid user_id in token: {}", e)))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Jwk {
-    /// Key identifier
     pub kid: String,
-    /// Key type
     pub kty: String,
-    /// Key set usage
     #[serde(rename = "use")]
     pub _use: String,
     pub alg: String,
-    /// Public key modulus (Base64URL)
     pub n: String,
-    /// Public key exponent (Base64URL)
     pub e: String,
 }
 
@@ -40,6 +61,13 @@ pub struct Jwks {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordHistory {
+    pub user_id: Uuid,
+    pub pwd_hash: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct UserIdentity {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -48,17 +76,18 @@ pub struct UserIdentity {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct UserCredential {
+    pub id: Uuid,
     pub identity_id: Uuid,
-    pub pwd_hash: String,
-    pub algorithm: String,
+    pub password_hash: String,
+    pub failed_attempts: i32,
+    pub locked_until: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub failed_attempts: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct RefreshToken {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -69,11 +98,4 @@ pub struct RefreshToken {
     pub revoked_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PasswordHistory {
-    pub user_id: Uuid,
-    pub pwd_hash: String,
-    pub created_at: DateTime<Utc>,
 }

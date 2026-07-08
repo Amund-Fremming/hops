@@ -1,5 +1,9 @@
 pub mod adapters;
 pub mod config;
-pub mod domain;
+pub mod db;
+pub mod error;
+pub mod handlers;
+pub mod models;
 pub mod ports;
-pub mod presentation;
+pub mod services;
+pub mod state;

@@ -7,8 +7,8 @@ use serde_json::json;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    domain::state::AppState,
-    presentation::{
+    state::AppState,
+    handlers::{
         audit::audit_routes, auth::auth_routes, middleware::auth_mw, user::user_routes,
     },
 };

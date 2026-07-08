@@ -1,15 +1,9 @@
 use hops::{
-    adapters::{
-        auth::adapter::JwtAdapter,
-        comms::adapter::CommsAdapter,
-        postgres::{
-            audit_repository::PostgresAuditRepository, auth_repository::PostgresAuthRepository,
-            user_repository::PostgresUserRepository,
-        },
-    },
+    adapters::comms::CommsAdapter,
     config::CONFIG,
-    domain::state::AppState,
-    presentation::app_routes,
+    handlers::app_routes,
+    services::auth::AuthService,
+    state::AppState,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -29,7 +23,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    // TODO - connect db, run mig, setup app state. App state should take in ports only, they should be created here, single entry point for change if needed later
     let pool = PgPoolOptions::new()
         .max_connections(10)
         .acquire_timeout(Duration::from_secs(5))
@@ -38,25 +31,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&CONFIG.database.url)
         .await?;
 
-    let user_repository = Arc::new(PostgresUserRepository::new(pool.clone()));
-    let audit_repository = Arc::new(PostgresAuditRepository::new(pool.clone()));
-    let auth_repository = Arc::new(PostgresAuthRepository::new(pool.clone()));
-
-    let auth = Arc::new(JwtAdapter::new(
-        auth_repository,
+    let auth = Arc::new(AuthService::new(
+        pool.clone(),
         CONFIG.auth.private_key_pem(),
         CONFIG.auth.public_key_pem(),
         &CONFIG.auth.audience,
         &CONFIG.auth.issuer,
     )?);
+    
     let comms = Arc::new(CommsAdapter::new(
         CONFIG.comms.username.clone(),
         CONFIG.comms.password.clone(),
     ));
 
     let app_state = Arc::new(AppState::new(
-        user_repository,
-        audit_repository,
+        pool,
         auth,
         comms,
     ));

@@ -9,8 +9,9 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    domain::{error::ServerError, state::AppState},
-    ports::auth_port::Claims,
+    error::ServerError,
+    state::AppState,
+    models::auth::Claims,
 };
 
 pub fn audit_routes(state: Arc<AppState>) -> Router {

@@ -4,8 +4,9 @@ use axum::{Extension, Json, Router, extract::State, response::IntoResponse, rout
 use reqwest::StatusCode;
 
 use crate::{
-    domain::{error::ServerError, state::AppState},
-    ports::auth_port::Claims,
+    error::ServerError,
+    state::AppState,
+    models::auth::Claims,
 };
 
 pub fn user_routes(state: Arc<AppState>) -> Router {
@@ -18,7 +19,7 @@ async fn me(
 ) -> Result<impl IntoResponse, ServerError> {
     let user_id = claims.user_id()?;
 
-    match state.user_repository.get_user(user_id).await? {
+    match crate::db::users::get_user(&state.pool, user_id).await? {
         Some(user) => Ok((StatusCode::OK, Json(user))),
         None => Err(ServerError::NotFound),
     }

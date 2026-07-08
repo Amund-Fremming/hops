@@ -8,7 +8,7 @@ use axum::{
 use reqwest::{StatusCode, header::AUTHORIZATION};
 use tracing::warn;
 
-use crate::domain::state::AppState;
+use crate::state::AppState;
 
 pub(crate) async fn auth_mw(
     State(state): State<Arc<AppState>>,

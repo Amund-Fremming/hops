@@ -1,10 +1,9 @@
-use hops::adapters::comms::adapter::CommsAdapter;
-use hops::ports::comms_port::CommsPort;
+use hops::{adapters::comms::CommsAdapter, ports::comms::CommsPort};
 use tracing::{error, info};
 
-const FROM: &str = "Mordi";
-const TO: &str = "+4747666050";
-const MESSAGE: &str = "Du er heldig som har Amund";
+const FROM: &str = "Hops";
+const TO: &str = "+4741387142";
+const MESSAGE: &str = "Hello!";
 
 #[tokio::main]
 async fn main() {

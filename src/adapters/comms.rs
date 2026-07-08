@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
-use crate::adapters::comms::models::SendSmsResponse;
-use crate::ports::comms_port::CommsPort;
+use crate::models::comms::SendSmsResponse;
+use crate::ports::comms::CommsPort;
 
 pub struct CommsAdapter {
     username: String,

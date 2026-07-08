@@ -1,14 +1,12 @@
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::domain::error::ServerError;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Audit {
     pub id: Uuid,
+    pub user_id: Option<Uuid>,
     pub resource_id: Uuid,
     pub resource_type: String,
     pub action: String,
@@ -20,21 +18,12 @@ pub struct Audit {
 
 #[derive(Debug, Default, Clone)]
 pub struct AuditQuery {
-    pub id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
     pub resource_id: Option<Uuid>,
     pub resource_type: Option<String>,
     pub action: Option<String>,
     pub from: Option<DateTime<Utc>>,
     pub to: Option<DateTime<Utc>>,
-    pub limit: Option<u64>,
-    pub offset: Option<u64>,
-}
-
-#[async_trait]
-pub trait AuditRepository: Send + Sync {
-    async fn create(&self, audit: Audit) -> Result<Audit, ServerError>;
-
-    async fn find(&self, query: AuditQuery) -> Result<Vec<Audit>, ServerError>;
-
-    async fn delete_older_than(&self, days: i64) -> Result<u64, ServerError>;
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
