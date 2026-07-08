@@ -128,27 +128,29 @@ impl AuthService {
 
     pub async fn phone_signup(
         &self,
+        given_name: &str,
+        family_name: &str,
         phone: &str,
         password: &str,
     ) -> Result<(Uuid, TokenResponse), ServerError> {
-        let user_id = Uuid::new_v4();
         let password_hash = Self::hash_password(password)?;
 
         // TODO - validate that phone is verified in the otp table
 
-        let user = User {
-            id: user_id,
-            phone: Some(phone.to_string()),
-        };
+        let mut user = User::new(given_name, family_name);
+        user.phone = Some(phone.to_string());
+        user.phone_verified = true;
+
+        // TODO optimize 5 db trips
 
         let mut tx = self.pool.begin().await?;
         create_user(&mut *tx, &user).await?;
-        create_identity(&mut *tx, user_id, "phone", phone).await?;
-        create_credential(&mut *tx, user_id, &password_hash).await?;
+        create_identity(&mut *tx, user.id, "phone", phone).await?;
+        create_credential(&mut *tx, user.id, &password_hash).await?;
         tx.commit().await?;
 
-        let token_response = self.generate_tokens(user_id)?;
-        Ok((user_id, token_response))
+        let token_response = self.generate_tokens(user.id)?;
+        Ok((user.id, token_response))
     }
 
     pub async fn phone_login(

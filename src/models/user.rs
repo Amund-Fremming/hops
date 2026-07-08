@@ -29,3 +29,20 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+impl User {
+    pub fn new(given_name: &str, family_name: &str) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            given_name: given_name.to_string(),
+            family_name: family_name.to_string(),
+            phone: None,
+            phone_verified: false,
+            email: None,
+            email_verified: false,
+            avatar_url: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+}
