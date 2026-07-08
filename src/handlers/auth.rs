@@ -20,7 +20,10 @@ async fn phone_login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<PhoneLoginRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let token_response = state.auth.phone_login(&req.phone, &req.password).await?;
+    let token_response = state
+        .auth
+        .phone_login(&req.phone_number, &req.password)
+        .await?;
 
     Ok((StatusCode::OK, Json(token_response)))
 }

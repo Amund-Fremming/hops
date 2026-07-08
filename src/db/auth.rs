@@ -59,7 +59,7 @@ where
 
 pub async fn get_credential_by_phone(
     pool: &Pool<Postgres>,
-    phone: &str,
+    phone_number: &str,
 ) -> Result<Option<UserCredential>, ServerError> {
     let credential = sqlx::query_as!(
         UserCredential,
@@ -69,7 +69,7 @@ pub async fn get_credential_by_phone(
         INNER JOIN user_identity ui ON ui.id = uc.identity_id
         WHERE ui.provider_id = $1
         "#,
-        phone
+        phone_number
     )
     .fetch_optional(pool)
     .await?;

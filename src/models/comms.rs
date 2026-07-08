@@ -5,7 +5,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Otp {
     pub id: Uuid,
-    pub phone: String,
+    pub phone_number: String,
     pub hash: String,
     pub expires_at: DateTime<Utc>,
     pub used_at: Option<DateTime<Utc>>,

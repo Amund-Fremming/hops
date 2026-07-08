@@ -1,8 +1,8 @@
 -- Add migration script here
 CREATE TABLE "user" (
     "id" UUID PRIMARY KEY,
-    "phone" VARCHAR(20),
-    "phone_verified" BOOLEAN NOT NULL DEFAULT FALSE,
+    "phone_number" VARCHAR(20),
+    "phone_number_verified" BOOLEAN NOT NULL DEFAULT FALSE,
     "email" VARCHAR(255),
     "email_verified" BOOLEAN NOT NULL DEFAULT FALSE,
     "given_name" VARCHAR(100) NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE "user" (
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_user_phone ON "user" ("phone");
+CREATE INDEX idx_user_phone_number ON "user" ("phone_number");
 CREATE INDEX idx_user_email ON "user" ("email");
 
 CREATE TABLE "user_identity" (
@@ -67,3 +67,17 @@ CREATE TABLE "audit_log" (
 CREATE INDEX idx_audit_log_user_id ON "audit_log" ("user_id");
 CREATE INDEX idx_audit_log_resource ON "audit_log" ("resource_type", "resource_id");
 CREATE INDEX idx_audit_log_created_at ON "audit_log" ("created_at");
+
+CREATE TABLE "otp" (
+    "id" UUID PRIMARY KEY,
+    "phone_number" VARCHAR(20) NOT NULL,
+    "hash" VARCHAR(128) NOT NULL,
+    "expires_at" TIMESTAMPTZ NOT NULL,
+    "verified_at" TIMESTAMPTZ,
+    "used_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "ip_address" VARCHAR(45),
+    "failed_attempts" INT NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_otp_phone_number_created ON "otp" ("phone_number", "created_at");

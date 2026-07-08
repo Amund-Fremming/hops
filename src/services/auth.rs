@@ -11,15 +11,18 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
-    db::auth::{create_credential, create_identity},
+    db::{auth::get_credential_by_phone, users::create_user},
+    error::ServerError,
+};
+use crate::{
+    db::{
+        auth::{create_credential, create_identity},
+        otp::get_otp_by_id,
+    },
     models::{
         auth::{Claims, Jwk, Jwks, TokenResponse},
         user::User,
     },
-};
-use crate::{
-    db::{auth::get_credential_by_phone, users::create_user},
-    error::ServerError,
 };
 
 pub struct AuthService {
@@ -128,24 +131,30 @@ impl AuthService {
 
     pub async fn phone_signup(
         &self,
+        otp_id: Uuid,
         given_name: &str,
         family_name: &str,
-        phone: &str,
         password: &str,
     ) -> Result<(Uuid, TokenResponse), ServerError> {
-        let password_hash = Self::hash_password(password)?;
+        let otp = get_otp_by_id(&self.pool, otp_id).await?;
 
-        // TODO - validate that phone is verified in the otp table
+        if !otp.is_verified() {
+            return Err(ServerError::Auth("Phone number not verified".to_string()));
+        }
+
+        let phone_number = otp.phone_number;
 
         let mut user = User::new(given_name, family_name);
-        user.phone = Some(phone.to_string());
-        user.phone_verified = true;
+        user.phone_number = Some(phone_number.clone());
+        user.phone_number_verified = true;
 
         // TODO optimize 5 db trips
 
         let mut tx = self.pool.begin().await?;
         create_user(&mut *tx, &user).await?;
-        create_identity(&mut *tx, user.id, "phone", phone).await?;
+        create_identity(&mut *tx, user.id, "phone", &phone_number).await?;
+
+        let password_hash = Self::hash_password(password)?;
         create_credential(&mut *tx, user.id, &password_hash).await?;
         tx.commit().await?;
 
@@ -155,17 +164,17 @@ impl AuthService {
 
     pub async fn phone_login(
         &self,
-        phone: &str,
+        phone_number: &str,
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
-        let Some(credentials) = get_credential_by_phone(&self.pool, phone).await? else {
-            warn!(phone = %phone, "Login failed: could not find phone identity for user.");
+        let Some(credentials) = get_credential_by_phone(&self.pool, phone_number).await? else {
+            warn!(phone_number = %phone_number, "Login failed: could not find phone identity for user.");
             return Err(ServerError::NotFound);
         };
 
         let pasword_hash = Self::hash_password(password)?;
         if pasword_hash != credentials.password_hash {
-            warn!(phone = %phone, "Login failed: wrong password.");
+            warn!(phone_number = %phone_number, "Login failed: wrong password.");
             return Err(ServerError::Auth("Login failed".to_string()));
         }
 

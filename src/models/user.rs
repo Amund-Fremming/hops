@@ -4,13 +4,13 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PhoneLoginRequest {
-    pub phone: String,
+    pub phone_number: String,
     pub password: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PhoneSignupRequest {
-    pub phone: String,
+    pub phone_number: String,
     pub password: String,
     pub given_name: String,
     pub family_name: String,
@@ -19,8 +19,8 @@ pub struct PhoneSignupRequest {
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
-    pub phone: Option<String>,
-    pub phone_verified: bool,
+    pub phone_number: Option<String>,
+    pub phone_number_verified: bool,
     pub email: Option<String>,
     pub email_verified: bool,
     pub given_name: String,
@@ -36,8 +36,8 @@ impl User {
             id: Uuid::new_v4(),
             given_name: given_name.to_string(),
             family_name: family_name.to_string(),
-            phone: None,
-            phone_verified: false,
+            phone_number: None,
+            phone_number_verified: false,
             email: None,
             email_verified: false,
             avatar_url: None,

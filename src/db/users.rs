@@ -8,7 +8,7 @@ pub async fn get_user(pool: &Pool<Postgres>, id: Uuid) -> Result<Option<User>, S
     let user = sqlx::query_as!(
         User,
         r#"
-        SELECT id, phone, phone_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
+        SELECT id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
         FROM "user"
         WHERE id = $1
         "#,
@@ -35,13 +35,13 @@ where
     let created = sqlx::query_as!(
         User,
         r#"
-        INSERT INTO "user" (id, phone, phone_verified, email, email_verified, given_name, family_name)
+        INSERT INTO "user" (id, phone_number, phone_number_verified, email, email_verified, given_name, family_name)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, phone, phone_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
+        RETURNING id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
         "#,
         user.id,
-        user.phone,
-        user.phone_verified,
+        user.phone_number,
+        user.phone_number_verified,
         user.email,
         user.email_verified,
         user.given_name,
