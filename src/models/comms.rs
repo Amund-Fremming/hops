@@ -1,18 +1,4 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Otp {
-    pub id: Uuid,
-    pub phone_number: String,
-    pub hash: String,
-    pub expires_at: DateTime<Utc>,
-    pub used_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub ip_address: Option<String>,
-    pub failed_attempts: i32,
-}
 
 #[derive(Debug, Serialize)]
 pub struct SendSmsRequest {

@@ -29,4 +29,8 @@ src/
 - rate limiting with tower governor
 - lock recovery med otp?
 
+Actions
+
+- audit and clippy and fmt and test in actions
+
 # hops
