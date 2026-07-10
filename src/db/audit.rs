@@ -1,29 +1,25 @@
 use sqlx::{Executor, Pool, Postgres};
 
 use crate::error::ServerError;
-use crate::models::audit::{Audit, AuditQuery};
+use crate::models::audit::{Action, Audit, AuditQuery, ResourceType};
 
-pub async fn create<'e, E>(exec: E, audit: &Audit) -> Result<Audit, ServerError>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+pub async fn create_audit(pool: &Pool<Postgres>, audit: &Audit) -> Result<Audit, ServerError> {
     let created = sqlx::query_as!(
         Audit,
         r#"
-        INSERT INTO audit_log (id, user_id, resource_id, resource_type, action, ip_address, user_agent, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, user_id, resource_id, resource_type, action, ip_address, user_agent, metadata, created_at
+        INSERT INTO audit_log (id, resource_id, resource_type, action, ip_address, user_agent, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, resource_id, resource_type as "resource_type: ResourceType", action as "action: Action", ip_address, user_agent, metadata, created_at
         "#,
         audit.id,
-        audit.user_id,
         audit.resource_id,
-        audit.resource_type,
-        audit.action,
+        &audit.resource_type as _,
+        &audit.action as _,
         audit.ip_address,
         audit.user_agent,
         audit.metadata
     )
-    .fetch_one(exec)
+    .fetch_one(pool)
     .await?;
 
     Ok(created)

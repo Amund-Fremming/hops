@@ -1,4 +1,5 @@
 -- Add migration script here
+DROP TABLE IF EXISTS "otp";
 DROP TABLE IF EXISTS "audit_log";
 DROP TABLE IF EXISTS "refresh_token";
 DROP TABLE IF EXISTS "user_credential";

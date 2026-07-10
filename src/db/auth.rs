@@ -3,7 +3,7 @@ use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
 use crate::error::ServerError;
-use crate::models::auth::{RefreshToken, UserCredential, UserIdentity};
+use crate::models::auth::{LoginObject, RefreshToken, UserCredential, UserIdentity};
 
 pub async fn create_identity<'e, E>(
     exec: E,
@@ -57,24 +57,29 @@ where
     Ok(credential)
 }
 
-pub async fn get_credential_by_phone(
+pub async fn get_phone_login_object(
     pool: &Pool<Postgres>,
     phone_number: &str,
-) -> Result<Option<UserCredential>, ServerError> {
-    let credential = sqlx::query_as!(
-        UserCredential,
+) -> Result<Option<LoginObject>, ServerError> {
+    let option = sqlx::query!(
         r#"
-        SELECT uc.id, uc.identity_id, uc.password_hash, uc.failed_attempts, uc.locked_until, uc.created_at, uc.updated_at
+        SELECT ui.user_id, uc.password_hash
         FROM user_credential uc
         INNER JOIN user_identity ui ON ui.id = uc.identity_id
-        WHERE ui.provider_id = $1
+        WHERE ui.provider_type = 'phone' AND ui.provider_id = $1
         "#,
         phone_number
     )
     .fetch_optional(pool)
     .await?;
 
-    Ok(credential)
+    let Some(row) = option else { return Ok(None) };
+    let login_object = LoginObject {
+        user_id: row.user_id,
+        password_hash: row.password_hash,
+    };
+
+    Ok(Some(login_object))
 }
 
 pub async fn find_refresh_token(

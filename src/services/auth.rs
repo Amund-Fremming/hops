@@ -6,13 +6,15 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use reqwest::StatusCode;
+use serde_json::json;
 use sqlx::{Pool, Postgres};
-use tracing::warn;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::{
-    db::{auth::get_credential_by_phone, users::create_user},
+    db::{audit::create_audit, auth::get_phone_login_object, users::create_user},
     error::ServerError,
+    models::audit::{AuditBuilder, ResourceType},
 };
 use crate::{
     db::{
@@ -129,6 +131,8 @@ impl AuthService {
             .is_ok())
     }
 
+    /// TODO:
+    /// - optimize 5/6 database trips
     pub async fn phone_signup(
         &self,
         otp_id: Uuid,
@@ -148,8 +152,6 @@ impl AuthService {
         user.phone_number = Some(phone_number.clone());
         user.phone_number_verified = true;
 
-        // TODO optimize 5 db trips
-
         let mut tx = self.pool.begin().await?;
         create_user(&mut *tx, &user).await?;
         create_identity(&mut *tx, user.id, "phone", &phone_number).await?;
@@ -167,18 +169,36 @@ impl AuthService {
         phone_number: &str,
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
-        let Some(credentials) = get_credential_by_phone(&self.pool, phone_number).await? else {
-            warn!(phone_number = %phone_number, "Login failed: could not find phone identity for user.");
+        let Some(login_object) = get_phone_login_object(&self.pool, phone_number).await? else {
+            warn!(phone_number = %phone_number, "Login failed: could not find user with credentials");
             return Err(ServerError::NotFound);
         };
 
         let pasword_hash = Self::hash_password(password)?;
-        if pasword_hash != credentials.password_hash {
-            warn!(phone_number = %phone_number, "Login failed: wrong password.");
+        if pasword_hash != login_object.password_hash {
+            warn!(phone_number = %phone_number, "Login failed: wrong password");
             return Err(ServerError::Auth("Login failed".to_string()));
         }
 
-        self.generate_tokens(user_id)
+        let user_id = login_object.user_id;
+        let phone_number = phone_number.to_string();
+        let pool = self.pool.clone();
+
+        tokio::task::spawn(async move {
+            let log = AuditBuilder::new()
+                .resource_id(user_id)
+                .resource_type(ResourceType::User)
+                .metadata(json!({
+                    "phone_number": phone_number,
+                }))
+                .build();
+
+            if let Err(e) = create_audit(&pool, &log).await {
+                error!("Failed to create audit log on `phone_login`");
+            }
+        });
+
+        self.generate_tokens(login_object.user_id)
     }
 
     pub async fn get_identities(&self, user_id: Uuid) -> Result<Vec<String>, ServerError> {

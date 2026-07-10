@@ -52,19 +52,20 @@ CREATE TABLE "refresh_token" (
 CREATE INDEX idx_refresh_token_user_id ON "refresh_token" ("user_id");
 CREATE INDEX idx_refresh_token_token_hash ON "refresh_token" ("token_hash");
 
+CREATE TYPE resource_type AS ENUM ('user');
+CREATE TYPE action AS ENUM ('login_success', 'login_failed', 'account_locked', 'password_change');
+
 CREATE TABLE "audit_log" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "user_id" UUID REFERENCES "user"("id") ON DELETE SET NULL,
     "resource_id" UUID NOT NULL,
-    "resource_type" VARCHAR(100) NOT NULL,
-    "action" VARCHAR(100) NOT NULL,
+    "resource_type" resource_type NOT NULL,
+    "action" "action" NOT NULL,
     "ip_address" VARCHAR(45),
     "user_agent" TEXT,
     "metadata" JSONB,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_log_user_id ON "audit_log" ("user_id");
 CREATE INDEX idx_audit_log_resource ON "audit_log" ("resource_type", "resource_id");
 CREATE INDEX idx_audit_log_created_at ON "audit_log" ("created_at");
 

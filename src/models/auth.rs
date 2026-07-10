@@ -76,6 +76,12 @@ pub struct UserIdentity {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct LoginObject {
+    pub user_id: Uuid,
+    pub password_hash: String,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct UserCredential {
     pub id: Uuid,
