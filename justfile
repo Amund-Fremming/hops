@@ -4,6 +4,9 @@ run:
 ex-comms:
     cargo run --example comms_example
 
+ex-signup:
+    cargo run --example phone_signup_example 
+
 reset-db:
     cargo sqlx database reset --force -y
 

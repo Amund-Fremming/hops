@@ -19,6 +19,9 @@ pub enum ServerError {
     #[error("Conflict")]
     Conflict,
 
+    #[error("OTP error: {0}")]
+    Otp(String),
+
     #[error("API error: {0} - {1}")]
     Api(StatusCode, String),
 }
@@ -49,6 +52,10 @@ impl IntoResponse for ServerError {
                 (StatusCode::NOT_FOUND, "Not found".to_string())
             }
             Self::Conflict => (StatusCode::CONFLICT, "Conflict".to_string()),
+            Self::Otp(msg) => {
+                warn!("OTP error: {}", msg);
+                (StatusCode::UNAUTHORIZED, "Not allowed".to_string())
+            }
             Self::Api(sc, msg) => {
                 warn!("API error: {} - {}", sc, msg);
                 (sc, msg)

@@ -36,11 +36,6 @@ src/
 - [ ] OTP max attempts enforcement
 - [ ] OTP rate limiting (max per 24h)
 
-### Architecture
-
-- [ ] Traits under adapters file, use in app state
-- [ ] Use repos inside services, inject into state
-
 ### Decisions Needed
 
 - [ ] Passwordless login requires given_name/family_name to be optional
@@ -51,6 +46,7 @@ src/
 
 ### Proposals
 
+- [ ] add test runtime to use a cache rather than sending actual messages
 - [ ] add last_login_at for tracing user logins without refresh token for metrics
 - [ ] should trace audit logs for failed logins
 

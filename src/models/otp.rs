@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use sha2::{Digest, Sha256};

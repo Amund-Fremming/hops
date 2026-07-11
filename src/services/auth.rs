@@ -194,7 +194,7 @@ impl AuthService {
                 .build();
 
             if let Err(e) = create_audit(&pool, &log).await {
-                error!("Failed to create audit log on `phone_login`");
+                error!("Failed to create audit log on `phone_login`: {}", e);
             }
         });
 
