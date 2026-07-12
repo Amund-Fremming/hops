@@ -1,21 +1,3 @@
-src/
-├── main.rs
-├── features/
-│ ├── users/
-│ │ ├── mod.rs
-│ │ ├── routes.rs # Axum handlers
-│ │ ├── service.rs # forretningslogikk
-│ │ ├── repository.rs # trait + DB-impl
-│ │ └── models.rs # domenetyper
-│ └── notifications/
-│ ├── mod.rs
-│ ├── routes.rs
-│ ├── service.rs
-│ └── models.rs
-└── adapters/
-├── auth0.rs # delt på tvers av features
-└── sms.rs # delt på tvers av features
-
 ## TODO
 
 ### Configuration
@@ -23,9 +5,6 @@ src/
 - [ ] Setup config repo to load config
 - [ ] Static data to provide non-imported and non-injected vars
 - [ ] Add runtime var for dryrun SMS in local env
-- [ ] Read OTP TTL from config
-- [ ] Read OTP max tries from config
-- [ ] Read OTP max messages per 24h from config
 - [ ] Read access token expiry from config
 - [ ] Read audit log eviction TTL from config
 

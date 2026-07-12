@@ -3,6 +3,27 @@ use rand::Rng;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+#[derive(Debug, thiserror::Error)]
+pub enum OtpError {
+    #[error("OTP expired")]
+    Expired,
+
+    #[error("Max attempts exceeded")]
+    MaxAttemptsExceeded,
+
+    #[error("Wrong code")]
+    WrongCode,
+
+    #[error("OTP not found")]
+    NotFound,
+
+    #[error("Max messages per day exceeded")]
+    MaxMessagesExceeded,
+
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+}
+
 pub struct OtpResponse {
     pub otp_id: Uuid,
     pub code: String,

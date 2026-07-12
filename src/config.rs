@@ -59,11 +59,19 @@ impl AuthConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct OtpConfig {
+    pub ttl_minutes: u8,
+    pub max_attempts: u8,
+    pub max_messages_per_day: u8,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub comms: CommsConfig,
     pub auth: AuthConfig,
+    pub otp: OtpConfig,
 }
 
 impl AppConfig {

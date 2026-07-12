@@ -2,6 +2,8 @@ use axum::response::IntoResponse;
 use reqwest::StatusCode;
 use tracing::{error, warn};
 
+pub use crate::models::otp::OtpError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
     #[error("Database error: {0}")]
@@ -20,7 +22,7 @@ pub enum ServerError {
     Conflict,
 
     #[error("OTP error: {0}")]
-    Otp(String),
+    Otp(#[from] OtpError),
 
     #[error("API error: {0} - {1}")]
     Api(StatusCode, String),
@@ -52,9 +54,28 @@ impl IntoResponse for ServerError {
                 (StatusCode::NOT_FOUND, "Not found".to_string())
             }
             Self::Conflict => (StatusCode::CONFLICT, "Conflict".to_string()),
-            Self::Otp(msg) => {
-                warn!("OTP error: {}", msg);
-                (StatusCode::UNAUTHORIZED, "Not allowed".to_string())
+            Self::Otp(err) => {
+                warn!("OTP error: {}", err);
+                match err {
+                    OtpError::Expired => (StatusCode::GONE, "OTP expired".to_string()),
+                    OtpError::MaxAttemptsExceeded => (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        "Max attempts exceeded".to_string(),
+                    ),
+                    OtpError::WrongCode => (StatusCode::UNAUTHORIZED, "Wrong code".to_string()),
+                    OtpError::NotFound => (StatusCode::NOT_FOUND, "OTP not found".to_string()),
+                    OtpError::MaxMessagesExceeded => (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        "Max messages per day exceeded".to_string(),
+                    ),
+                    OtpError::Database(db_err) => {
+                        error!("OTP database error: {}", db_err);
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Database error".to_string(),
+                        )
+                    }
+                }
             }
             Self::Api(sc, msg) => {
                 warn!("API error: {} - {}", sc, msg);

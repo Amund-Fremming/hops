@@ -8,3 +8,8 @@ url = "postgres://postgres:password@postgres:5432/storage"
 [auth]
 audience = "hops"
 issuer = "hops"
+
+[otp]
+ttl_minutes = 5
+max_attempts = 3
+max_messages_per_day = 10
