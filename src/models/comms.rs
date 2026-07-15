@@ -19,3 +19,13 @@ pub struct SendSmsResponse {
     pub message: String,
     pub id: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct MakeCallResponse {
+    pub id: String,
+    pub created: String,
+    pub state: String,
+    pub from: String,
+    pub to: String,
+    pub direction: String,
+}

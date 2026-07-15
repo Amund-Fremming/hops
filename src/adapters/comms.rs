@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::models::comms::SendSmsResponse;
+use crate::models::comms::{MakeCallResponse, SendSmsResponse};
 use crate::ports::comms::CommsPort;
 
 pub struct CommsAdapter {
@@ -31,6 +31,31 @@ impl CommsPort for CommsAdapter {
             .send()
             .await?
             .json::<SendSmsResponse>()
+            .await?;
+
+        Ok(response)
+    }
+
+    async fn make_call(
+        &self,
+        from: &str,
+        to: &str,
+        audio_url: &str,
+    ) -> Result<MakeCallResponse, reqwest::Error> {
+        let client = reqwest::Client::new();
+        let voice_start = format!(r#"{{"play":"{}"}}"#, audio_url);
+
+        let response = client
+            .post("https://api.46elks.com/a1/calls")
+            .basic_auth(&self.username, Some(&self.password))
+            .form(&[
+                ("from", from),
+                ("to", to),
+                ("voice_start", voice_start.as_str()),
+            ])
+            .send()
+            .await?
+            .json::<MakeCallResponse>()
             .await?;
 
         Ok(response)
