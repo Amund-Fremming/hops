@@ -3,7 +3,7 @@ use tracing::{error, info};
 
 const SMS_FROM: &str = "Hops";
 const CALL_FROM: &str = "+46766860615";
-const TO: &str = "+4790407100";
+const TO: &str = "+4748844935";
 const MESSAGE: &str = "Hello!";
 const AUDIO_URL: &str = "https://7a5f-185-153-4-34.ngrok-free.app/call.mp3";
 
