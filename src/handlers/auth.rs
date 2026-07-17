@@ -98,6 +98,13 @@ async fn verify_otp(
             "Invalid code for OTP"
         );
 
+        // TODO - increment asyn failed attampts
+        /*
+
+                ip_address field exists in the OTP table but isn't populated during creation
+        No cleanup mechanism for expired OTPs (consider a scheduled task)
+        OTP response doesn't include expires_at (helpful for client-side countdown) */
+
         return Err(ServerError::Otp(OtpError::WrongCode));
     }
 
