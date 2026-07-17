@@ -1,10 +1,14 @@
 use chrono::{DateTime, Utc};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OtpError {
+    #[error("SMS failed to send")]
+    SmsFailed,
+
     #[error("OTP expired")]
     Expired,
 
@@ -24,7 +28,19 @@ pub enum OtpError {
     Database(#[from] sqlx::Error),
 }
 
+#[derive(Debug, Serialize)]
 pub struct OtpResponse {
+    pub otp_id: Uuid,
+}
+
+// TODO - add verification
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateOtpRequest {
+    pub phone_number: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerifyOtpRequest {
     pub otp_id: Uuid,
     pub code: String,
 }

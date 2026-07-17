@@ -13,3 +13,12 @@ issuer = "hops-test"
 ttl_minutes = 5
 max_attempts = 3
 max_messages_per_day = 10
+
+[crypto]
+secret = "test-secret"
+
+[comms]
+username = "test-username"
+password = "test-password"
+from = "Hops"
+otp_message_template = "Your verification code is {code}"

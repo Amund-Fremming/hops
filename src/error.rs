@@ -75,6 +75,10 @@ impl IntoResponse for ServerError {
                             "Database error".to_string(),
                         )
                     }
+                    OtpError::SmsFailed => {
+                        error!("SMS Failed to send");
+                        (StatusCode::INTERNAL_SERVER_ERROR, "SMS Failed".to_string())
+                    }
                 }
             }
             Self::Api(sc, msg) => {

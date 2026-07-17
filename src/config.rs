@@ -30,6 +30,8 @@ pub struct DatabaseConfig {
 pub struct CommsConfig {
     pub username: String,
     pub password: String,
+    pub from: String,
+    pub otp_message_template: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -66,12 +68,18 @@ pub struct OtpConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct CryptoConfig {
+    pub secret: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub comms: CommsConfig,
     pub auth: AuthConfig,
     pub otp: OtpConfig,
+    pub crypto: CryptoConfig,
 }
 
 impl AppConfig {

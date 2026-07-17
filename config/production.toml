@@ -13,3 +13,12 @@ issuer = "hops"
 ttl_minutes = 5
 max_attempts = 3
 max_messages_per_day = 10
+
+[crypto]
+secret = ""  # Set via APP__CRYPTO__SECRET env var
+
+[comms]
+username = ""  # Set via APP__COMMS__USERNAME env var
+password = ""  # Set via APP__COMMS__PASSWORD env var
+from = ""  # Set via APP__COMMS__FROM env var
+otp_message_template = "Your verification code is {code}"

@@ -2,10 +2,16 @@ use std::sync::Arc;
 
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use reqwest::StatusCode;
+use tracing::{error, info, warn};
 
 use crate::{
-    error::ServerError,
-    models::user::{PhoneLoginRequest, PhoneSignupRequest},
+    config::CONFIG,
+    db,
+    error::{OtpError, ServerError},
+    models::{
+        otp::{CreateOtpRequest, Otp, OtpResponse, VerifyOtpRequest},
+        user::{PhoneLoginRequest, PhoneSignupRequest},
+    },
     state::AppState,
 };
 
@@ -13,6 +19,8 @@ pub fn auth_routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/login/phone", post(phone_login))
         .route("/signup/phone", post(phone_signup))
+        .route("/otp", post(create_otp))
+        .route("/otp/verify", post(verify_otp))
         .with_state(state)
 }
 
@@ -34,5 +42,74 @@ async fn phone_signup(
 ) -> Result<impl IntoResponse, ServerError> {
     todo!();
 
+    // cannot exist any user identity phone with credential phone number to the incoming
+    // verify that there exists a verified otp for this phone number
+    //
+
     Ok(())
+}
+
+async fn create_otp(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateOtpRequest>,
+) -> Result<impl IntoResponse, ServerError> {
+    let code = Otp::generate_code();
+    let hash = state.crypto.hash(&code);
+    let response = db::otp::create_otp(&state.pool, &req.phone_number, &hash).await?;
+
+    let from = CONFIG.comms.from.clone();
+    let message = &CONFIG.comms.otp_message_template.replace("{code}", &code);
+
+    if let Err(e) = state
+        .comms
+        .send_sms(&from, &req.phone_number, message)
+        .await
+    {
+        error!(
+            otp_id = %response.otp_id,
+            phone_number = %req.phone_number,
+            error = %e,
+            "Failed to send OTP, deleting entry"
+        );
+        db::otp::delete_otp(&state.pool, response.otp_id).await?;
+
+        return Err(ServerError::Otp(OtpError::SmsFailed));
+    }
+
+    info!(
+        phone_number = %req.phone_number,
+        "Created otp entry"
+    );
+
+    Ok((StatusCode::OK, Json(response)))
+}
+
+async fn verify_otp(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<VerifyOtpRequest>,
+) -> Result<impl IntoResponse, ServerError> {
+    let otp = db::otp::get_valid_otp(&state.pool, req.otp_id).await?;
+    let is_valid = state.crypto.verify(&req.code, &otp.hash);
+    if !is_valid {
+        warn!(
+            otp_id = %req.otp_id,
+            code = %req.code,
+            phone_number = %otp.phone_number,
+            "Invalid code for OTP"
+        );
+
+        return Err(ServerError::Otp(OtpError::WrongCode));
+    }
+
+    if let Err(e) = db::otp::mark_verified(&state.pool, req.otp_id).await {
+        error!(
+            otp_id = %req.otp_id,
+            code = %req.code,
+            phone_number = %otp.phone_number,
+            "Failed to mark OTP as verified, phone should be manually verified"
+        );
+        return Err(e.into());
+    }
+
+    Ok(StatusCode::OK)
 }

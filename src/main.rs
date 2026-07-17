@@ -1,9 +1,6 @@
 use hops::{
-    adapters::comms::CommsAdapter,
-    config::CONFIG,
-    handlers::app_routes,
-    services::auth::AuthService,
-    state::AppState,
+    adapters::comms::CommsAdapter, adapters::crypto::CryptoAdapter, config::CONFIG,
+    handlers::app_routes, services::auth::AuthService, state::AppState,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -38,17 +35,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &CONFIG.auth.audience,
         &CONFIG.auth.issuer,
     )?);
-    
+
     let comms = Arc::new(CommsAdapter::new(
         CONFIG.comms.username.clone(),
         CONFIG.comms.password.clone(),
     ));
 
-    let app_state = Arc::new(AppState::new(
-        pool,
-        auth,
-        comms,
-    ));
+    let crypto = Arc::new(CryptoAdapter::new(CONFIG.crypto.secret.clone()));
+
+    let app_state = Arc::new(AppState::new(pool, auth, comms, crypto));
 
     let app = app_routes(app_state);
 

@@ -902,6 +902,7 @@ dependencies = [
  "config",
  "dotenvy",
  "hex",
+ "hmac",
  "jsonwebtoken",
  "once_cell",
  "rand",
