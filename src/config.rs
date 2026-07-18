@@ -65,6 +65,7 @@ pub struct OtpConfig {
     pub ttl_minutes: u8,
     pub max_attempts: u8,
     pub max_messages_per_day: u8,
+    pub cleanup_interval_minutes: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]

@@ -13,6 +13,7 @@ issuer = "hops"
 ttl_minutes = 5
 max_attempts = 3
 max_messages_per_day = 10
+cleanup_interval_minutes = 60
 
 [crypto]
 secret = ""  # Set via APP__CRYPTO__SECRET env var

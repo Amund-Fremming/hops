@@ -13,6 +13,7 @@ issuer = "hops-test"
 ttl_minutes = 5
 max_attempts = 3
 max_messages_per_day = 10
+cleanup_interval_minutes = 1
 
 [crypto]
 secret = "test-secret"

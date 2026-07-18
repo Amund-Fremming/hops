@@ -13,6 +13,7 @@ issuer = "hops-dev"
 ttl_minutes = 5
 max_attempts = 3
 max_messages_per_day = 10
+cleanup_interval_minutes = 60
 
 [crypto]
 secret = "dev-secret-change-in-production"

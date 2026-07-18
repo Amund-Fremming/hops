@@ -19,7 +19,7 @@ async fn me(
 ) -> Result<impl IntoResponse, ServerError> {
     let user_id = claims.user_id()?;
 
-    match crate::db::users::get_user(&state.pool, user_id).await? {
+    match crate::db::users::get_user(state.get_pool(), user_id).await? {
         Some(user) => Ok((StatusCode::OK, Json(user))),
         None => Err(ServerError::NotFound),
     }

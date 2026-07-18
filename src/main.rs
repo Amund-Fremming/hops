@@ -1,6 +1,7 @@
 use hops::{
     adapters::comms::CommsAdapter, adapters::crypto::CryptoAdapter, config::CONFIG,
-    handlers::app_routes, services::auth::AuthService, state::AppState,
+    db::otp::delete_expired_otps, handlers::app_routes, services::auth::AuthService,
+    state::AppState,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -44,7 +45,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let crypto = Arc::new(CryptoAdapter::new(CONFIG.crypto.secret.clone()));
 
     let app_state = Arc::new(AppState::new(pool, auth, comms, crypto));
-
     let app = app_routes(app_state);
 
     let addr = format!("{}:{}", CONFIG.server.address, CONFIG.server.port);

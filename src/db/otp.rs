@@ -99,6 +99,19 @@ pub async fn mark_verified(pool: &Pool<Postgres>, otp_id: Uuid) -> Result<(), sq
     Ok(())
 }
 
+pub async fn delete_expired_otps(pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM "otp"
+        WHERE expires_at < NOW()
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 pub async fn get_otp_count_today(
     pool: &Pool<Postgres>,
     phone_number: &str,

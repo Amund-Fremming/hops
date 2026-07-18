@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use hops::adapters::comms::CommsAdapter;
-use hops::db::otp::{create_otp, verify_otp};
+use hops::adapters::crypto::CryptoAdapter;
+use hops::db::otp::{create_otp, get_valid_otp, mark_verified};
+use hops::models::otp::Otp;
 use hops::services::auth::AuthService;
 use hops::state::AppState;
 use sqlx::postgres::PgPoolOptions;
@@ -11,6 +13,7 @@ use tracing::info;
 
 const PHONE_NUMBER: &str = "+4741387142";
 const SEND_REAL_SMS: bool = false;
+const CRYPTO_SECRET: &str = "example-secret-key-do-not-use-in-production";
 
 const PRIVATE_KEY_PEM: &str = r#"-----BEGIN RSA PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCeDvL4uflGzB+O
@@ -51,8 +54,10 @@ ZIhOT8OcTETHA5QaGHXSsfTARe5aieFT0/CsjwSxvBchYSV9bntAUNE0LybjjV7E
 1QIDAQAB
 -----END PUBLIC KEY-----"#;
 
-async fn opt_flow_successfull_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
-    let login_object = create_otp(&state.pool, PHONE_NUMBER).await?;
+async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+    let code = Otp::generate_code();
+    let hash = state.crypto.hash(&code);
+    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash).await?;
 
     if SEND_REAL_SMS {
         state
@@ -60,17 +65,24 @@ async fn opt_flow_successfull_code(state: Arc<AppState>) -> Result<(), Box<dyn s
             .send_sms(
                 "Hops",
                 PHONE_NUMBER,
-                &format!("Your login code is: {}", login_object.code),
+                &format!("Your login code is: {}", code),
             )
             .await?;
     }
 
-    verify_otp(&state.pool, PHONE_NUMBER, &login_object.code).await?;
+    let otp = get_valid_otp(state.get_pool(), otp_response.otp_id).await?;
+    if !state.crypto.verify(&code, &otp.hash) {
+        return Err("Code verification failed".into());
+    }
+    mark_verified(state.get_pool(), otp_response.otp_id).await?;
+
     Ok(())
 }
 
-async fn opt_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
-    let login_object = create_otp(&state.pool, PHONE_NUMBER).await?;
+async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+    let code = Otp::generate_code();
+    let hash = state.crypto.hash(&code);
+    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash).await?;
 
     if SEND_REAL_SMS {
         state
@@ -78,12 +90,17 @@ async fn opt_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::e
             .send_sms(
                 "Hops",
                 PHONE_NUMBER,
-                &format!("Your login code is: {}", login_object.code),
+                &format!("Your login code is: {}", code),
             )
             .await?;
     }
 
-    verify_otp(&state.pool, PHONE_NUMBER, "000000").await?;
+    let otp = get_valid_otp(state.get_pool(), otp_response.otp_id).await?;
+    if !state.crypto.verify("000000", &otp.hash) {
+        return Err("Wrong code".into());
+    }
+    mark_verified(state.get_pool(), otp_response.otp_id).await?;
+
     Ok(())
 }
 
@@ -108,7 +125,11 @@ async fn create_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
         std::env::var("ELKS_PASSWORD").unwrap_or_default(),
     );
 
-    let state = AppState::new(pool, Arc::new(auth), Arc::new(comms));
+    let crypto = CryptoAdapter::new(
+        std::env::var("CRYPTO_SECRET").unwrap_or_else(|_| CRYPTO_SECRET.to_string()),
+    );
+
+    let state = AppState::new(pool, Arc::new(auth), Arc::new(comms), Arc::new(crypto));
     Ok(Arc::new(state))
 }
 
@@ -118,14 +139,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
     let state = create_state().await?;
 
-    match opt_flow_successfull_code(state.clone()).await {
-        Ok(()) => info!("✅ OTP flow successfull"),
+    match otp_flow_successful_code(state.clone()).await {
+        Ok(()) => info!("✅ OTP flow successful"),
         Err(e) => info!("❌ OTP flow failed: {}", e),
     }
 
-    match opt_flow_failed_code(state.clone()).await {
+    match otp_flow_failed_code(state.clone()).await {
         Ok(()) => info!("❌ OTP flow was correct, should fail"),
-        Err(..) => info!("✅ OTP flow failed successfull"),
+        Err(..) => info!("✅ OTP flow failed successfully"),
     }
 
     // TODO
