@@ -9,7 +9,7 @@ use crate::{
     db,
     error::{OtpError, ServerError},
     models::{
-        otp::{CreateOtpRequest, Otp, OtpResponse, VerifyOtpRequest},
+        otp::{CreateOtpRequest, Otp, VerifyOtpRequest},
         user::{PhoneLoginRequest, PhoneSignupRequest},
     },
     state::AppState,
@@ -113,12 +113,6 @@ async fn verify_otp(
                 );
             };
         });
-
-        // TODO - increment asyn failed attampts
-        /*
-
-                ip_address field exists in the OTP table but isn't populated during creation
-        OTP response doesn't include expires_at (helpful for client-side countdown) */
 
         return Err(ServerError::Otp(OtpError::WrongCode));
     }

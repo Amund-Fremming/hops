@@ -45,8 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let crypto = Arc::new(CryptoAdapter::new(CONFIG.crypto.secret.clone()));
 
     let app_state = Arc::new(AppState::new(pool, auth, comms, crypto));
-    let app = app_routes(app_state);
+    app_state.spawn_otp_cron_job();
 
+    let app = app_routes(app_state);
     let addr = format!("{}:{}", CONFIG.server.address, CONFIG.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 

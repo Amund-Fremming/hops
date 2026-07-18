@@ -42,6 +42,8 @@ impl AppState {
         let cleanup_pool = self.pool.clone();
         let cleanup_interval = Duration::from_secs(CONFIG.otp.cleanup_interval_minutes as u64 * 60);
 
+        info!("🧹 Starting OTP cron job");
+
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(cleanup_interval).await;
