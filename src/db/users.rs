@@ -70,3 +70,22 @@ pub async fn delete_user(pool: &Pool<Postgres>, id: Uuid) -> Result<bool, Server
 
     Ok(result.rows_affected() > 0)
 }
+
+pub async fn is_phone_in_use(
+    pool: &Pool<Postgres>,
+    phone_number: &str,
+) -> Result<bool, ServerError> {
+    let exists = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM "user"
+            WHERE phone_number = $1 AND phone_number_verified = TRUE
+        ) as "exists!"
+        "#,
+        phone_number
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(exists)
+}

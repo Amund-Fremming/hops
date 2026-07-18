@@ -12,9 +12,16 @@ use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::{
-    db::{audit::create_audit, auth::get_phone_login_object, users::create_user},
+    db::{
+        audit::create_audit,
+        auth::get_phone_login_object,
+        users::{create_user, is_phone_in_use},
+    },
     error::ServerError,
-    models::audit::{AuditBuilder, ResourceType},
+    models::{
+        audit::{AuditBuilder, ResourceType},
+        auth::ProviderType,
+    },
 };
 use crate::{
     db::{
@@ -148,16 +155,22 @@ impl AuthService {
 
         let phone_number = otp.phone_number;
 
+        if is_phone_in_use(&self.pool, &phone_number).await? {
+            warn!(phone_number = %phone_number, "Signup attempted with phone number already in use");
+            return Err(ServerError::Conflict);
+        }
+
         let mut user = User::new(given_name, family_name);
         user.phone_number = Some(phone_number.clone());
         user.phone_number_verified = true;
 
         let mut tx = self.pool.begin().await?;
         create_user(&mut *tx, &user).await?;
-        create_identity(&mut *tx, user.id, "phone", &phone_number).await?;
+        let identity =
+            create_identity(&mut *tx, user.id, ProviderType::Phone, &phone_number).await?;
 
         let password_hash = Self::hash_password(password)?;
-        create_credential(&mut *tx, user.id, &password_hash).await?;
+        create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
 
         let token_response = self.generate_tokens(user.id)?;

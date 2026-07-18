@@ -46,3 +46,20 @@ impl User {
         }
     }
 }
+
+impl From<PhoneSignupRequest> for User {
+    fn from(req: PhoneSignupRequest) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            phone_number: Some(req.phone_number),
+            phone_number_verified: false,
+            email: None,
+            email_verified: false,
+            given_name: req.given_name,
+            family_name: req.family_name,
+            avatar_url: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+}

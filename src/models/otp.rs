@@ -62,6 +62,18 @@ impl Otp {
         self.verified_at.is_some()
     }
 
+    pub fn is_expired(&self) -> bool {
+        self.expires_at < Utc::now()
+    }
+
+    pub fn is_max_attempts_exceeded(&self, max: i32) -> bool {
+        self.failed_attempts >= max
+    }
+
+    pub fn is_valid(&self, max_attempts: i32) -> bool {
+        !self.is_expired() && !self.is_max_attempts_exceeded(max_attempts)
+    }
+
     pub fn generate_code() -> String {
         let code: u32 = rand::thread_rng().gen_range(0..1_000_000);
         format!("{:06}", code)

@@ -4,8 +4,10 @@ use chrono::Utc;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::config::CONFIG;
-use crate::models::otp::{Otp, OtpError, OtpResponse};
+use crate::{
+    config::CONFIG,
+    models::otp::{Otp, OtpError, OtpResponse},
+};
 
 pub async fn get_otp_by_id(pool: &Pool<Postgres>, id: Uuid) -> Result<Otp, OtpError> {
     let otp = sqlx::query_as!(
@@ -48,22 +50,6 @@ pub async fn get_otp_by_phone_number(
         Some(otp) => Ok(otp),
         None => Err(OtpError::NotFound),
     }
-}
-
-/// Validates OTP state (expiry, attempts) and returns the OTP record.
-/// Hash verification should be done by caller using injected hasher.
-pub async fn get_valid_otp(pool: &Pool<Postgres>, id: Uuid) -> Result<Otp, OtpError> {
-    let otp = get_otp_by_id(pool, id).await?;
-
-    if otp.expires_at < Utc::now() {
-        return Err(OtpError::Expired);
-    }
-
-    if otp.failed_attempts >= CONFIG.otp.max_attempts as i32 {
-        return Err(OtpError::MaxAttemptsExceeded);
-    }
-
-    Ok(otp)
 }
 
 pub async fn increment_failed_attempts(

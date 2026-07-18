@@ -3,12 +3,12 @@ use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
 use crate::error::ServerError;
-use crate::models::auth::{LoginObject, RefreshToken, UserCredential, UserIdentity};
+use crate::models::auth::{LoginObject, ProviderType, RefreshToken, UserCredential, UserIdentity};
 
 pub async fn create_identity<'e, E>(
     exec: E,
     user_id: Uuid,
-    provider_type: &str,
+    provider_type: ProviderType,
     provider_id: &str,
 ) -> Result<UserIdentity, ServerError>
 where
@@ -23,7 +23,7 @@ where
         "#,
         Uuid::new_v4(),
         user_id,
-        provider_type,
+        provider_type.as_str(),
         provider_id
     )
     .fetch_one(exec)

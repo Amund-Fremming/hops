@@ -76,6 +76,22 @@ pub struct UserIdentity {
     pub created_at: DateTime<Utc>,
 }
 
+pub enum ProviderType {
+    Phone,
+    Email,
+    Social,
+}
+
+impl ProviderType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Phone => "phone",
+            Self::Email => "email",
+            Self::Social => "social",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LoginObject {
     pub user_id: Uuid,

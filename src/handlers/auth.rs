@@ -9,8 +9,9 @@ use crate::{
     db,
     error::{OtpError, ServerError},
     models::{
+        auth::ProviderType,
         otp::{CreateOtpRequest, Otp, VerifyOtpRequest},
-        user::{PhoneLoginRequest, PhoneSignupRequest},
+        user::{PhoneLoginRequest, PhoneSignupRequest, User},
     },
     state::AppState,
 };
@@ -37,16 +38,18 @@ async fn phone_login(
 }
 
 async fn phone_signup(
-    State(_state): State<Arc<AppState>>,
-    Json(_req): Json<PhoneSignupRequest>,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<PhoneSignupRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    todo!();
+    let otp = db::otp::get_otp_by_phone_number(state.get_pool(), &req.phone_number).await?;
 
-    // cannot exist any user identity phone with credential phone number to the incoming
-    // verify that there exists a verified otp for this phone number
-    //
+    let (user_id, token_response) = state
+        .auth
+        .phone_signup(otp.id, &req.given_name, &req.family_name, &req.password)
+        .await?;
 
-    Ok(())
+    info!(user_id = %user_id, "Phone signup successful");
+    Ok((StatusCode::CREATED, Json(token_response)))
 }
 
 async fn create_otp(
@@ -91,10 +94,19 @@ async fn verify_otp(
 ) -> Result<impl IntoResponse, ServerError> {
     let otp_id = req.otp_id;
 
-    let otp = db::otp::get_valid_otp(state.get_pool(), otp_id).await?;
-    let is_valid = state.crypto.verify(&req.code, &otp.hash);
+    let otp = db::otp::get_otp_by_id(state.get_pool(), otp_id).await?;
 
-    if !is_valid {
+    if otp.is_expired() {
+        return Err(ServerError::Otp(OtpError::Expired));
+    }
+
+    if otp.is_max_attempts_exceeded(CONFIG.otp.max_attempts as i32) {
+        return Err(ServerError::Otp(OtpError::MaxAttemptsExceeded));
+    }
+
+    let valid_code = state.crypto.verify(&req.code, &otp.hash);
+
+    if !valid_code {
         warn!(
             otp_id = %otp_id,
             code = %req.code,

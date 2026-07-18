@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use hops::adapters::comms::CommsAdapter;
 use hops::adapters::crypto::CryptoAdapter;
-use hops::db::otp::{create_otp, get_valid_otp, mark_verified};
+use hops::db::otp::{create_otp, get_otp_by_id, mark_verified};
 use hops::models::otp::Otp;
 use hops::services::auth::AuthService;
 use hops::state::AppState;
@@ -70,10 +70,20 @@ async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn st
             .await?;
     }
 
-    let otp = get_valid_otp(state.get_pool(), otp_response.otp_id).await?;
+    let otp = get_otp_by_id(state.get_pool(), otp_response.otp_id).await?;
+
+    if otp.is_expired() {
+        return Err("OTP expired".into());
+    }
+
+    if otp.is_max_attempts_exceeded(3) {
+        return Err("Max attempts exceeded".into());
+    }
+
     if !state.crypto.verify(&code, &otp.hash) {
         return Err("Code verification failed".into());
     }
+
     mark_verified(state.get_pool(), otp_response.otp_id).await?;
 
     Ok(())
@@ -95,10 +105,20 @@ async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::e
             .await?;
     }
 
-    let otp = get_valid_otp(state.get_pool(), otp_response.otp_id).await?;
+    let otp = get_otp_by_id(state.get_pool(), otp_response.otp_id).await?;
+
+    if otp.is_expired() {
+        return Err("OTP expired".into());
+    }
+
+    if otp.is_max_attempts_exceeded(3) {
+        return Err("Max attempts exceeded".into());
+    }
+
     if !state.crypto.verify("000000", &otp.hash) {
         return Err("Wrong code".into());
     }
+
     mark_verified(state.get_pool(), otp_response.otp_id).await?;
 
     Ok(())
