@@ -17,14 +17,14 @@ async fn main() {
 
     let comms = CommsAdapter::new(username, password);
 
-    // match comms.send_sms(SMS_FROM, TO, MESSAGE).await {
-    //     Ok(response) => {
-    //         info!(id = %response.id, status = %response.status, cost = %response.cost, "SMS sent successfully");
-    //     }
-    //     Err(e) => {
-    //         error!(error = %e, "Failed to send SMS");
-    //     }
-    // }
+    match comms.send_sms(SMS_FROM, TO, MESSAGE).await {
+        Ok(response) => {
+            info!(id = %response.id, status = %response.status, cost = %response.cost, "SMS sent successfully");
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to send SMS");
+        }
+    }
 
     match comms.make_call(CALL_FROM, TO, AUDIO_URL).await {
         Ok(response) => {

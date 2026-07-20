@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PhoneLoginRequest {
@@ -8,11 +9,13 @@ pub struct PhoneLoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct PhoneSignupRequest {
     pub phone_number: String,
     pub password: String,
+    #[validate(regex(path = *crate::NAME_REGEX))]
     pub given_name: String,
+    #[validate(regex(path = *crate::NAME_REGEX))]
     pub family_name: String,
 }
 
@@ -28,6 +31,15 @@ pub struct User {
     pub avatar_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct PatchUserRequest {
+    #[validate(regex(path = *crate::NAME_REGEX))]
+    pub given_name: Option<String>,
+    #[validate(regex(path = *crate::NAME_REGEX))]
+    pub family_name: Option<String>,
+    pub avatar_url: Option<String>,
 }
 
 impl User {

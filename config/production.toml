@@ -8,6 +8,9 @@ url = "postgres://postgres:password@postgres:5432/storage"
 [auth]
 audience = "hops"
 issuer = "hops"
+access_token_lifetime_minutes = 15
+refresh_token_lifetime_days = 30
+max_failed_login_attempts = 5
 
 [otp]
 ttl_minutes = 5
@@ -23,3 +26,10 @@ username = ""  # Set via APP__COMMS__USERNAME env var
 password = ""  # Set via APP__COMMS__PASSWORD env var
 from = ""  # Set via APP__COMMS__FROM env var
 otp_message_template = "Your verification code is {code}"
+
+[audit]
+retention_days = 90
+cleanup_interval_hours = 24
+
+[admin]
+admins = []  # Set via APP__ADMIN__ADMINS env var

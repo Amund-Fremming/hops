@@ -95,7 +95,9 @@ impl ProviderType {
 #[derive(Debug, Clone)]
 pub struct LoginObject {
     pub user_id: Uuid,
+    pub identity_id: Uuid,
     pub password_hash: String,
+    pub is_locked: bool,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]

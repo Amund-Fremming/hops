@@ -26,7 +26,50 @@ pub async fn create_audit(pool: &Pool<Postgres>, audit: &Audit) -> Result<Audit,
 }
 
 pub async fn list(pool: &Pool<Postgres>, query: AuditQuery) -> Result<Vec<Audit>, ServerError> {
-    todo!()
+    let mut conditions = Vec::new();
+
+    if let Some(resource_id) = &query.resource_id {
+        conditions.push(format!("resource_id = '{resource_id}'"));
+    }
+
+    if let Some(resource_type) = &query.resource_type {
+        conditions.push(format!("resource_type = '{resource_type}'"));
+    }
+
+    if let Some(action) = &query.action {
+        conditions.push(format!("action = '{}'", action.to_str()));
+    }
+
+    if let Some(from) = &query.from {
+        conditions.push(format!("created_at >= '{from}'"));
+    }
+
+    if let Some(to) = &query.to {
+        conditions.push(format!("created_at <= '{to}'"));
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let limit = query.limit.unwrap_or(100);
+    let offset = query.offset.unwrap_or(0);
+
+    let sql = format!(
+        r#"
+        SELECT id, resource_id, resource_type, action, ip_address, user_agent, metadata, created_at
+        FROM audit_log
+        {where_clause}
+        ORDER BY created_at DESC
+        LIMIT {limit} OFFSET {offset}
+        "#
+    );
+
+    let logs = sqlx::query_as::<_, Audit>(&sql).fetch_all(pool).await?;
+
+    Ok(logs)
 }
 
 pub async fn delete_older_than<'e, E>(exec: E, days: i64) -> Result<u64, ServerError>

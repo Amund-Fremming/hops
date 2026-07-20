@@ -1,8 +1,10 @@
-use sqlx::{Executor, Pool, Postgres};
+use sqlx::{Executor, Pool, Postgres, query_as};
+use tracing::warn;
 use uuid::Uuid;
 
+use crate::db;
 use crate::error::ServerError;
-use crate::models::user::User;
+use crate::models::user::{PatchUserRequest, User};
 
 pub async fn get_user(pool: &Pool<Postgres>, id: Uuid) -> Result<Option<User>, ServerError> {
     let user = sqlx::query_as!(
@@ -25,7 +27,21 @@ pub async fn list_users(
     limit: i32,
     offset: i32,
 ) -> Result<Vec<User>, ServerError> {
-    todo!()
+    let users = sqlx::query_as!(
+        User,
+        r#"
+        SELECT id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
+        FROM "user"
+        ORDER BY created_at DESC
+        LIMIT $1 OFFSET $2
+        "#,
+        limit as i64,
+        offset as i64
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(users)
 }
 
 pub async fn create_user<'e, E>(exec: E, user: &User) -> Result<User, ServerError>
@@ -53,8 +69,46 @@ where
     Ok(created)
 }
 
-pub async fn patch_user(pool: &Pool<Postgres>) -> Result<User, ServerError> {
-    todo!()
+pub async fn patch_user(
+    pool: &Pool<Postgres>,
+    user_id: Uuid,
+    user: &PatchUserRequest,
+) -> Result<User, ServerError> {
+    let mut updates = Vec::new();
+
+    if let Some(given_name) = &user.given_name {
+        updates.push(format!("given_name = '{given_name}'"));
+    }
+
+    if let Some(family_name) = &user.family_name {
+        updates.push(format!("family_name = '{family_name}'"));
+    }
+
+    if let Some(avatar_url) = &user.avatar_url {
+        updates.push(format!("avatar_url= '{avatar_url}'"));
+    }
+
+    if updates.is_empty() {
+        warn!("User tried patching non updated fields");
+        let user = db::user::get_user(pool, user_id)
+            .await?
+            .ok_or(ServerError::NotFound)?;
+
+        return Ok(user);
+    }
+
+    let set_statement = updates.join(" AND ");
+    let query = format!(
+        r#"
+        UPDATE "user"
+        SET {set_statement}
+        WHERE user_id = ${user_id}
+        "#
+    );
+
+    let user = query_as::<_, User>(&query).fetch_one(pool).await?;
+
+    Ok(user)
 }
 
 pub async fn delete_user(pool: &Pool<Postgres>, id: Uuid) -> Result<bool, ServerError> {

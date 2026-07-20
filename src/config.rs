@@ -48,6 +48,9 @@ pub struct AuthConfig {
     public_key_pem: String,
     pub audience: String,
     pub issuer: String,
+    pub access_token_lifetime_minutes: i64,
+    pub refresh_token_lifetime_days: i64,
+    pub max_failed_login_attempts: i32,
 }
 
 impl AuthConfig {
@@ -64,13 +67,30 @@ impl AuthConfig {
 pub struct OtpConfig {
     pub ttl_minutes: u8,
     pub max_attempts: u8,
-    pub max_messages_per_day: u8,
+    pub max_messages_per_day: i64,
     pub cleanup_interval_minutes: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CryptoConfig {
     pub secret: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AuditConfig {
+    pub retention_days: i64,
+    pub cleanup_interval_hours: u16,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AdminConfig {
+    pub admins: Vec<uuid::Uuid>,
+}
+
+impl AdminConfig {
+    pub fn is_admin(&self, user_id: &uuid::Uuid) -> bool {
+        self.admins.contains(user_id)
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -81,6 +101,8 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     pub otp: OtpConfig,
     pub crypto: CryptoConfig,
+    pub audit: AuditConfig,
+    pub admin: AdminConfig,
 }
 
 impl AppConfig {

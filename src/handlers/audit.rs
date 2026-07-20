@@ -1,30 +1,27 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Router,
-    extract::{Path, State},
+    Extension, Json, Router,
+    extract::{Query, State},
     response::IntoResponse,
     routing::get,
 };
-use uuid::Uuid;
+use reqwest::StatusCode;
 
 use crate::{
-    error::ServerError,
-    state::AppState,
-    models::auth::Claims,
+    db, error::ServerError, models::audit::AuditQuery, models::auth::Claims, state::AppState,
 };
 
 pub fn audit_routes(state: Arc<AppState>) -> Router {
-    Router::new()
-        .route("/{audit_id}", get(get_log))
-        .with_state(state)
+    Router::new().route("/", get(list_logs)).with_state(state)
 }
 
-async fn get_log(
+async fn list_logs(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
-    Path(audit_id): Path<Uuid>,
+    Query(q): Query<AuditQuery>,
 ) -> Result<impl IntoResponse, ServerError> {
-    todo!();
-    Ok(())
+    state.require_admin(&claims)?;
+    let logs = db::audit::list(state.get_pool(), q).await?;
+    Ok((StatusCode::OK, Json(logs)))
 }

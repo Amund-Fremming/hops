@@ -21,6 +21,12 @@ pub enum ServerError {
     #[error("Conflict")]
     Conflict,
 
+    #[error("Account locked")]
+    AccountLocked,
+
+    #[error("Forbidden")]
+    Forbidden,
+
     #[error("OTP error: {0}")]
     Otp(#[from] OtpError),
 
@@ -54,6 +60,8 @@ impl IntoResponse for ServerError {
                 (StatusCode::NOT_FOUND, "Not found".to_string())
             }
             Self::Conflict => (StatusCode::CONFLICT, "Conflict".to_string()),
+            Self::AccountLocked => (StatusCode::FORBIDDEN, "Account locked".to_string()),
+            Self::Forbidden => (StatusCode::FORBIDDEN, "Forbidden".to_string()),
             Self::Otp(err) => {
                 warn!("OTP error: {}", err);
                 match err {

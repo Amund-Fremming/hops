@@ -49,7 +49,7 @@ pub struct Audit {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct AuditQuery {
     pub resource_id: Option<Uuid>,
     pub resource_type: Option<String>,

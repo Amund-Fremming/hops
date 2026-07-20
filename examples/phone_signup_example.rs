@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use hops::adapters::comms::CommsAdapter;
 use hops::adapters::crypto::CryptoAdapter;
+use hops::db;
 use hops::db::otp::{create_otp, get_otp_by_id, mark_verified};
 use hops::models::otp::Otp;
 use hops::services::auth::AuthService;
@@ -15,43 +16,43 @@ const PHONE_NUMBER: &str = "+4741387142";
 const SEND_REAL_SMS: bool = false;
 const CRYPTO_SECRET: &str = "example-secret-key-do-not-use-in-production";
 
-const PRIVATE_KEY_PEM: &str = r#"-----BEGIN RSA PRIVATE KEY-----
-MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCeDvL4uflGzB+O
-jhu7yBd+cTFPVQ8LR0IYx0kD2TAfQO8mnuAUZOBxenva1taQyYpJMhK9x50b1s5C
-UNvMSCxaIxH/WvpRhQbv6fCKjgFQIyfHM45pJdHMCcy+LYHs7NiTgLc+KT1O2l7Q
-rDyfUuFGTABAYfy8HxxgA4wHN5AbQBNCyvcytQwUAgaNYKG4WcPfcmzRH34nGZgL
-9BawcFiXEFUK38aJDCxoW9nt2PVBA35AKyd/vdecdxlCV6WXFp3voY7mWHe/+X7T
-xuue7vxkiE5Pw5xMRMcDlBoYddKx9MBF7lqJ4VPT8KyPBLG8FyFhJX1ue0BQ0TQv
-JuONXsTVAgMBAAECgf9UYPv/zJ3x2FxVvjJlYmx9vpqUaimd28IYIvYtF8VDlLwX
-N2Ro1BxTIxBRGQrIQM+SQ9O9fNMNXvS9x8I59vhhJlfKpXGnaLJLYe2ytMdUAMXm
-PPUfLRF9271xyYQ9ojNR4LqdH2bwsaNBw1vvB6U74gGVsrnkXrdx38g2vMgxwyv5
-ObXTXlRixm6Klg16fPWqc+7XnP20WU31K+6txRlc5j03DFWy5M+99l1Kt9i8OQGb
-trD6SYS4Gm676juqt5tKFtz1dIMcRXSsPz9eWmeFpMRJ09EU9shZODkBx5/WG/1B
-N/VtQtftFlVNX54kKPNaGUsFZY2V5C+n207wUKkCgYEA1nCAw/mMh6Vhza5uD6Ms
-tqE+6nUHQ9cMz799RsyDWw4kOL0q8mS213D8P/YIL7EyTyf9TWaq3FFNbeIWngri
-7u4ZqQGoh4MYZvcQ38lDtLhVygi9H1DCv2c0/IKnuHclZMHhOsn2XigKps8hMrv1
-XG/G3mlJcG62dpxp8IdpZU8CgYEAvLET2JdLMTlbQaTYe3vP0kMMTLvaGd+lvbv2
-ZMaDQpfpHBbYo0n+Nc32gSP+F8Gjdpd0eKWaK1wbBjekXn8uzPbch4UvDmXeyKtR
-C05MzEb0yRZ1bsqXg0dzRl7aqA+Z/I0HGstelwmv1tCsE0P7gmxILwemHzbQPcwa
-DQGrMpsCgYAeH1OXM9jPvSWN9PC09aD0TpY97Q6GMxEzpZx9c4EIK2ZfKgN8ZTVh
-8hcdDPx9ZpDAmcd1NfTOWgVcaCPxM2pJUdz85qS71Gh7Hj2akfUWz8YNSUj3uyqA
-JIlG5zuUJ/hyvOFclr4q38kPQY1SSSDgSTtQRs3wIz0yUCp5hSwC9QKBgQCqBq4p
-Zvr8WgCfABmJ+6DiiEQXCNaYpexFMY/ucupoIVaOVw/S46PLe9H5wCL/6R6QiB0N
-cbugApjfW1gjRls3meJRw3MJeEXtcGHQ3Ddbgzyjzjb3JFqukr2O1X4WHijVZ4bV
-YBfV5Yaq/NFxcrq5ZTUOG8hXLB8s8DMxMSXArQKBgQDMg7DrBwtNjvDHIZZ/v690
-9AvHh1fUZHYETCEPheiJzv2rb+P/65qGRSIhgjfFvzBDcCRrw4r/baCcgSXzoM6s
-zc3yRLOJZMGUCmP4Qekwfj11NYgdrIOFosMLCv91dHlJHSLNom8VQuZxZJNn0eTN
-R1JiU7mesME6ZVBFUwCY7A==
------END RSA PRIVATE KEY-----"#;
+const PRIVATE_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCzMzWPk4RwZCfP
+DneGzgAyt0XqCMXGe2Ev5z1HP7Hnf0FRKuDzlwGM0LqFejkIBUzQgPAadfzbw7Gs
+DUM48RZCKAovRmsOlU2jdmpuIAnTqIVYRPZDuHN2obJa+wNTKsB3n969e+pv/tC6
+hw0Q/kpYSXcd7ZrECdrlds1ezoVPTMSqnAdx08/N0e4jsjlf18Sueyj77fILE75t
+fCsLw41uQzoMl0e0THSy4D7rLws4tTGWbJf3VYmlMb5PBXx3lkwS4VBilQvb9ptu
+6pZEH0Unf+ZGxV4pZ/hb7rsVes2WRR69x7bDlCMCAKq+4RiwwIIXURSHJBOIRsHO
+JdPA6i2PAgMBAAECggEAAqWBp6+g1Lz0BggTEcg9rnXfvdBOWnzNXYW5DbIDblew
+zjw851nFf9O5/2Agy0HK4GmGsX27Bg8AUYY+bZmkX7n8wCNFpVguO/8v7AMOf8+F
+WrjruOoThtjTx3jpslklBnwzl5Ly/w0l/lfMZhpNOClJ+eZXpW/FcTvHVkD849ZO
+OzEjwz81li5zL7psttC2simeThTMr8NGW8bCKHY8YncdYTt2iYBZoO/Jp6VKYMMn
+H/lfYyFQkdnVAJTxQWQ1/sE3m1TwEkHjxZQe1EgUxnDtRXWoOVyxM8JCB4HXYfix
+d2hXnurnXK+vtgmzlkZyqphSUgCceHo2GYl7gKuz4QKBgQD2y3PC1VEm6RxR5/Nw
+DCjJNZg9XmGySge1gM7NFfr/Bg2FyVMaiiMrpkJLUNvcSm6Umje327+wvtJy20Q2
+FFzIvOL1s7EaobOcuiHfOxlsz5F6b7/uR8QmG8U6hEfYUEV5yt2yTAh7CR63atzf
+IQKx4fiFdufA1wmPaQwHm2h44QKBgQC54lJAvkKFAfIDXVg1f6pgOJMyOhn3ctEl
+ceoF6CCClXUhKXTkV+rUfqYyLHEKM8rL18UTHEzbTknIkzAY83Cwt/IN1ZVGNhJR
+8UMoGFsUVxpyluMvyvp7srL7gzinrLdQoukqhF34JauXpXw8IxTQ9YLjTSaQ42al
+Qj3AhMJEbwKBgEj7z8cdeHtOUs6yDp7jKaifTd9QKwojtHXrmryxtGF4s8UNzaK6
+mT4OU+qcBfj2lg8iMDoSJXUqaWgICfsIOIwwt9m7gzOCAHDn5p5yhslT9QzFQXhB
+BvPSIJh2iByjWHh1EuzoaVWhU9EgLCNcSsS6M9mcWVsA/NXJVgJl5hZhAoGAfhjj
+x3vJ0ETTkii+b/xc7c0zPX1gpBZFfutZ4AvqEeule4uN+mERsnj/8UVooY0k40dK
+L36hPJxNPT1sAWETby45i9z52JlRsDjEX+y1zISSMm3dTEybw1IkTK5lvolSCeeZ
+2PfWb0HOt57ROlJqCp6h3eQ2Z098EFtxXKoyxw0CgYB9S7EiTLTsuco3YeceN1p0
+S9knEAv2uqVvo36tNDQTl3knddiuo4jlCu0oxEowPcEgQRzewEKNyyipa0Erzfjs
+6ch33JvR36/3u2PDdpai5BlQ8tBaKmD6XcgQuFccq6dePCzS87BV86KFbm6duPaK
+EOOp4KFL7ImDF2WAX+n5RA==
+-----END PRIVATE KEY-----"#;
 
 const PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAng7y+Ln5Rswfjo4bu8gX
-fnExT1UPC0dCGMdJA9kwH0DvJp7gFGTgcXp72tbWkMmKSTISvcedG9bOQlDbzEgs
-WiMR/1r6UYUG7+nwio4BUCMnxzOOaSXRzAnMvi2B7OzYk4C3Pik9Ttpe0Kw8n1Lh
-RkwAQGH8vB8cYAOMBzeQG0ATQsr3MrUMFAIGjWChuFnD33Js0R9+JxmYC/QWsHBY
-lxBVCt/GiQwsaFvZ7dj1QQN+QCsnf73XnHcZQlellxad76GO5lh3v/l+08brnu78
-ZIhOT8OcTETHA5QaGHXSsfTARe5aieFT0/CsjwSxvBchYSV9bntAUNE0LybjjV7E
-1QIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszM1j5OEcGQnzw53hs4A
+MrdF6gjFxnthL+c9Rz+x539BUSrg85cBjNC6hXo5CAVM0IDwGnX828OxrA1DOPEW
+QigKL0ZrDpVNo3ZqbiAJ06iFWET2Q7hzdqGyWvsDUyrAd5/evXvqb/7QuocNEP5K
+WEl3He2axAna5XbNXs6FT0zEqpwHcdPPzdHuI7I5X9fErnso++3yCxO+bXwrC8ON
+bkM6DJdHtEx0suA+6y8LOLUxlmyX91WJpTG+TwV8d5ZMEuFQYpUL2/abbuqWRB9F
+J3/mRsVeKWf4W+67FXrNlkUevce2w5QjAgCqvuEYsMCCF1EUhyQTiEbBziXTwOot
+jwIDAQAB
 -----END PUBLIC KEY-----"#;
 
 async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
@@ -124,6 +125,41 @@ async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+async fn complete_signup_flow_successful(
+    state: Arc<AppState>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Create OTP
+    let code = Otp::generate_code();
+    let hash = state.crypto.hash(&code);
+    let otp = db::otp::create_otp(state.get_pool(), PHONE_NUMBER, &hash).await?;
+
+    // 2. Verify OTP (simulating user entering correct code)
+    let fetched_otp = db::otp::get_otp_by_id(state.get_pool(), otp.otp_id).await?;
+    if fetched_otp.is_expired() {
+        return Err("OTP expired".into());
+    }
+    if !state.crypto.verify(&code, &fetched_otp.hash) {
+        return Err("Code verification failed".into());
+    }
+    db::otp::mark_verified(state.get_pool(), otp.otp_id).await?;
+
+    // 3. Complete signup via auth service
+    let (user_id, tokens) = state
+        .auth
+        .phone_signup(otp.otp_id, "Test", "User", "SecurePassword123!")
+        .await?;
+
+    info!(
+        user_id = %user_id,
+        access_token_len = tokens.access_token.len(),
+        refresh_token_len = tokens.refresh_token.len(),
+        expires_in = tokens.expires_in,
+        "Full signup flow completed"
+    );
+
+    Ok(())
+}
+
 async fn create_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
@@ -132,8 +168,13 @@ async fn create_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
 
+    let crypto = Arc::new(CryptoAdapter::new(
+        std::env::var("CRYPTO_SECRET").unwrap_or_else(|_| CRYPTO_SECRET.to_string()),
+    ));
+
     let auth = AuthService::new(
         pool.clone(),
+        crypto.clone(),
         PRIVATE_KEY_PEM,
         PUBLIC_KEY_PEM,
         "hops-api",
@@ -145,11 +186,7 @@ async fn create_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
         std::env::var("ELKS_PASSWORD").unwrap_or_default(),
     );
 
-    let crypto = CryptoAdapter::new(
-        std::env::var("CRYPTO_SECRET").unwrap_or_else(|_| CRYPTO_SECRET.to_string()),
-    );
-
-    let state = AppState::new(pool, Arc::new(auth), Arc::new(comms), Arc::new(crypto));
+    let state = AppState::new(pool, Arc::new(auth), Arc::new(comms), crypto);
     Ok(Arc::new(state))
 }
 
@@ -167,6 +204,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match otp_flow_failed_code(state.clone()).await {
         Ok(()) => info!("❌ OTP flow was correct, should fail"),
         Err(..) => info!("✅ OTP flow failed successfully"),
+    }
+
+    match complete_signup_flow_successful(state.clone()).await {
+        Ok(()) => info!("✅ Singup flow successful"),
+        Err(e) => info!("❌ Signup flow failed: {}", e),
     }
 
     // TODO

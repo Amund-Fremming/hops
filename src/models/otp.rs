@@ -70,10 +70,6 @@ impl Otp {
         self.failed_attempts >= max
     }
 
-    pub fn is_valid(&self, max_attempts: i32) -> bool {
-        !self.is_expired() && !self.is_max_attempts_exceeded(max_attempts)
-    }
-
     pub fn generate_code() -> String {
         let code: u32 = rand::thread_rng().gen_range(0..1_000_000);
         format!("{:06}", code)

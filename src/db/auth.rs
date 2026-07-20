@@ -60,10 +60,11 @@ where
 pub async fn get_phone_login_object(
     pool: &Pool<Postgres>,
     phone_number: &str,
+    max_failed_attempts: i32,
 ) -> Result<Option<LoginObject>, ServerError> {
     let option = sqlx::query!(
         r#"
-        SELECT ui.user_id, uc.password_hash
+        SELECT ui.id as identity_id, ui.user_id, uc.password_hash, uc.failed_attempts
         FROM user_credential uc
         INNER JOIN user_identity ui ON ui.id = uc.identity_id
         WHERE ui.provider_type = 'phone' AND ui.provider_id = $1
@@ -76,10 +77,48 @@ pub async fn get_phone_login_object(
     let Some(row) = option else { return Ok(None) };
     let login_object = LoginObject {
         user_id: row.user_id,
+        identity_id: row.identity_id,
         password_hash: row.password_hash,
+        is_locked: row.failed_attempts >= max_failed_attempts,
     };
 
     Ok(Some(login_object))
+}
+
+pub async fn increment_failed_attempts(
+    pool: &Pool<Postgres>,
+    identity_id: Uuid,
+) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE user_credential
+        SET failed_attempts = failed_attempts + 1, updated_at = NOW()
+        WHERE identity_id = $1
+        "#,
+        identity_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn reset_failed_attempts(
+    pool: &Pool<Postgres>,
+    identity_id: Uuid,
+) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE user_credential
+        SET failed_attempts = 0, updated_at = NOW()
+        WHERE identity_id = $1
+        "#,
+        identity_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn find_refresh_token(

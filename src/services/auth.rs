@@ -1,7 +1,6 @@
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
-};
+use std::sync::Arc;
+use std::time::Duration;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
@@ -12,10 +11,12 @@ use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::{
+    config::CONFIG,
     db::{
+        self,
         audit::create_audit,
-        auth::get_phone_login_object,
-        users::{create_user, is_phone_in_use},
+        auth::{get_phone_login_object, increment_failed_attempts, reset_failed_attempts},
+        user::{create_user, is_phone_in_use},
     },
     error::ServerError,
     models::{
@@ -32,10 +33,12 @@ use crate::{
         auth::{Claims, Jwk, Jwks, TokenResponse},
         user::User,
     },
+    ports::crypto::CryptoPort,
 };
 
 pub struct AuthService {
     pool: Pool<Postgres>,
+    crypto: Arc<dyn CryptoPort>,
     jwks: Jwks,
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
@@ -47,6 +50,7 @@ pub struct AuthService {
 impl AuthService {
     pub fn new(
         pool: Pool<Postgres>,
+        crypto: Arc<dyn CryptoPort>,
         private_key_pem: &str,
         public_key_pem: &str,
         audience: &str,
@@ -68,6 +72,7 @@ impl AuthService {
 
         Ok(Self {
             pool,
+            crypto,
             jwks,
             encoding_key,
             decoding_key,
@@ -92,8 +97,8 @@ impl AuthService {
         Ok(claims)
     }
 
-    pub fn generate_tokens(&self, user_id: Uuid) -> Result<TokenResponse, ServerError> {
-        let access_token_lifetime = 16 * 60; // 15 mins
+    pub async fn generate_tokens(&self, user_id: Uuid) -> Result<TokenResponse, ServerError> {
+        let access_token_lifetime = CONFIG.auth.access_token_lifetime_minutes.clone();
 
         let claims = Claims {
             sub: user_id.to_string(),
@@ -112,30 +117,27 @@ impl AuthService {
             URL_SAFE_NO_PAD.encode(bytes)
         };
 
+        // TODO - insert refresh token to database
+
+        let hash = self.crypto.hash(&refresh_token);
+        let refresh_token_expiry =
+            Utc::now() + Duration::from_hours(24 * CONFIG.auth.refresh_token_lifetime_days as u64);
+
+        db::auth::create_refresh_token(
+            &self.pool,
+            user_id,
+            &hash,
+            refresh_token_expiry,
+            None, // TODO - use this
+            None, // TODO use device id
+        )
+        .await?;
+
         Ok(TokenResponse {
             access_token,
             refresh_token,
             expires_in: access_token_lifetime,
         })
-    }
-
-    fn hash_password(password: &str) -> Result<String, ServerError> {
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map(|hash| hash.to_string())
-            .map_err(|e| ServerError::Auth(format!("Failed to hash password: {e}")))
-    }
-
-    fn verify_password(password: &str, hash: &str) -> Result<bool, ServerError> {
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| ServerError::Auth(format!("Invalid password hash: {e}")))?;
-
-        Ok(Argon2::default()
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .is_ok())
     }
 
     /// TODO:
@@ -169,11 +171,14 @@ impl AuthService {
         let identity =
             create_identity(&mut *tx, user.id, ProviderType::Phone, &phone_number).await?;
 
-        let password_hash = Self::hash_password(password)?;
+        let password_hash = self
+            .crypto
+            .hash_password(password)
+            .map_err(|e| ServerError::Auth(e))?;
         create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
 
-        let token_response = self.generate_tokens(user.id)?;
+        let token_response = self.generate_tokens(user.id).await?;
         Ok((user.id, token_response))
     }
 
@@ -182,16 +187,30 @@ impl AuthService {
         phone_number: &str,
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
-        let Some(login_object) = get_phone_login_object(&self.pool, phone_number).await? else {
+        let max_attempts = CONFIG.auth.max_failed_login_attempts;
+        let Some(login_object) =
+            get_phone_login_object(&self.pool, phone_number, max_attempts).await?
+        else {
             warn!(phone_number = %phone_number, "Login failed: could not find user with credentials");
             return Err(ServerError::NotFound);
         };
 
-        let pasword_hash = Self::hash_password(password)?;
-        if pasword_hash != login_object.password_hash {
+        if login_object.is_locked {
+            warn!(phone_number = %phone_number, "Login failed: account locked");
+            return Err(ServerError::AccountLocked);
+        }
+
+        if !self
+            .crypto
+            .verify_password(password, &login_object.password_hash)
+            .map_err(|e| ServerError::Auth(e))?
+        {
             warn!(phone_number = %phone_number, "Login failed: wrong password");
+            increment_failed_attempts(&self.pool, login_object.identity_id).await?;
             return Err(ServerError::Auth("Login failed".to_string()));
         }
+
+        reset_failed_attempts(&self.pool, login_object.identity_id).await?;
 
         let user_id = login_object.user_id;
         let phone_number = phone_number.to_string();
@@ -211,10 +230,14 @@ impl AuthService {
             }
         });
 
-        self.generate_tokens(login_object.user_id)
+        self.generate_tokens(login_object.user_id).await
     }
 
     pub async fn get_identities(&self, user_id: Uuid) -> Result<Vec<String>, ServerError> {
+        /*
+            Get all users identities, and then if they are currently logged in with what devices
+            Create a pretty struct to retunr to user.
+        */
         todo!()
     }
 
@@ -227,15 +250,7 @@ impl AuthService {
         todo!()
     }
 
-    pub async fn rotate_tokens(&self, refresh_token: &str) -> Result<TokenResponse, ServerError> {
-        todo!()
-    }
-
-    pub async fn increment_failed_attempts(&self, user_id: Uuid) -> Result<(), ServerError> {
-        todo!()
-    }
-
-    pub async fn reset_failed_attempts(&self, user_id: Uuid) -> Result<(), ServerError> {
+    pub async fn refresh_token(&self, refresh_token: &str) -> Result<TokenResponse, ServerError> {
         todo!()
     }
 }
