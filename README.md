@@ -5,6 +5,7 @@
 - [ ] expand the refresh tokens to have session as parent
 - [ ] fix all todos
 - [ ] rate limit refresh token with device id
+- [ ] create sqlx tests for all auth flows so they can be ran in the pipeline
 
 ### Auth / Security
 
@@ -16,6 +17,7 @@
 - [ ] Add runtime var for dryrun SMS in local env
 - [ ] Passwordless login requires given_name/family_name to be optional
 - [ ] Drop email from user, make phone_number non-optional
+- [ ] probably move to another architecture like feature folder (even tough it will break fast because of importing eachother)
 
 ### Proposals
 
