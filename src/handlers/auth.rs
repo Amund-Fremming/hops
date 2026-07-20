@@ -56,19 +56,16 @@ async fn create_otp(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateOtpRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let max_daily_otp = CONFIG.otp.max_messages_per_day;
-    let otp_today = db::otp::get_otp_count_today(state.get_pool(), &req.phone_number).await?;
-    if otp_today >= max_daily_otp {
-        warn!(
-            phone_number = %req.phone_number,
-            "User has exceeded max OTP for the day"
-        );
-        return Err(ServerError::Otp(OtpError::MaxMessagesExceeded));
-    }
-
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let response = db::otp::create_otp(state.get_pool(), &req.phone_number, &hash).await?;
+    let response = db::otp::create_otp(
+        state.get_pool(),
+        &req.phone_number,
+        &hash,
+        CONFIG.otp.ttl_minutes,
+        CONFIG.otp.max_messages_per_day,
+    )
+    .await?;
 
     let from = CONFIG.comms.from.clone();
     let message = &CONFIG.comms.otp_message_template.replace("{code}", &code);

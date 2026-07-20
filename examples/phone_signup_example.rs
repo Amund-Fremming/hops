@@ -58,7 +58,7 @@ jwIDAQAB
 async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash).await?;
+    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash, 5, 10).await?;
 
     if SEND_REAL_SMS {
         state
@@ -93,7 +93,7 @@ async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn st
 async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash).await?;
+    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash, 5, 10).await?;
 
     if SEND_REAL_SMS {
         state
@@ -131,7 +131,7 @@ async fn complete_signup_flow_successful(
     // 1. Create OTP
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let otp = db::otp::create_otp(state.get_pool(), PHONE_NUMBER, &hash).await?;
+    let otp = db::otp::create_otp(state.get_pool(), PHONE_NUMBER, &hash, 5, 10).await?;
 
     // 2. Verify OTP (simulating user entering correct code)
     let fetched_otp = db::otp::get_otp_by_id(state.get_pool(), otp.otp_id).await?;

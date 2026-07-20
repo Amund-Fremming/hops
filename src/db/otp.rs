@@ -4,10 +4,7 @@ use chrono::Utc;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::{
-    config::CONFIG,
-    models::otp::{Otp, OtpError, OtpResponse},
-};
+use crate::models::otp::{Otp, OtpError, OtpResponse};
 
 pub async fn get_otp_by_id(pool: &Pool<Postgres>, id: Uuid) -> Result<Otp, OtpError> {
     let otp = sqlx::query_as!(
@@ -98,7 +95,7 @@ pub async fn delete_expired_otps(pool: &Pool<Postgres>) -> Result<u64, sqlx::Err
     Ok(result.rows_affected())
 }
 
-pub async fn get_otp_count_today(
+async fn get_otp_count_today(
     pool: &Pool<Postgres>,
     phone_number: &str,
 ) -> Result<i64, sqlx::Error> {
@@ -114,16 +111,17 @@ pub async fn get_otp_count_today(
     .await
 }
 
-/// TODO - rate limit
 pub async fn create_otp(
     pool: &Pool<Postgres>,
     phone_number: &str,
     hash: &str,
+    ttl_minutes: u8,
+    max_messages_per_day: i64,
 ) -> Result<OtpResponse, OtpError> {
-    let expires_at = Utc::now() + Duration::from_mins(CONFIG.otp.ttl_minutes as u64);
+    let expires_at = Utc::now() + Duration::from_mins(ttl_minutes as u64);
 
     let otp_today = get_otp_count_today(pool, phone_number).await?;
-    if otp_today >= CONFIG.otp.max_messages_per_day as i64 {
+    if otp_today >= max_messages_per_day {
         return Err(OtpError::MaxMessagesExceeded);
     }
 
