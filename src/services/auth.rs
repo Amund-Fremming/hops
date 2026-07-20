@@ -128,8 +128,9 @@ impl AuthService {
             user_id,
             &hash,
             refresh_token_expiry,
-            None, // TODO - use this
-            None, // TODO use device id
+            None,      // TODO - use this
+            device_id, // TODO use device id
+            device_name,
         )
         .await?;
 

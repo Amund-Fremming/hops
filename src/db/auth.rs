@@ -128,7 +128,7 @@ pub async fn find_refresh_token(
     let token = sqlx::query_as!(
         RefreshToken,
         r#"
-        SELECT id, user_id, token_hash, user_agent, device_id, expires_at, revoked_at, created_at, last_used_at
+        SELECT id, user_id, token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
         FROM refresh_token
         WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()
         "#,
@@ -146,7 +146,8 @@ pub async fn create_refresh_token<'e, E>(
     token_hash: &str,
     expires_at: DateTime<Utc>,
     user_agent: Option<&str>,
-    device_id: Option<&str>,
+    device_id: Uuid,
+    device_name: String,
 ) -> Result<RefreshToken, ServerError>
 where
     E: Executor<'e, Database = Postgres>,
@@ -154,16 +155,17 @@ where
     let token = sqlx::query_as!(
         RefreshToken,
         r#"
-        INSERT INTO refresh_token (id, user_id, token_hash, expires_at, user_agent, device_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, user_id, token_hash, user_agent, device_id, expires_at, revoked_at, created_at, last_used_at
+        INSERT INTO refresh_token (id, user_id, token_hash, expires_at, user_agent, device_id, device_name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, user_id, token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
         "#,
         Uuid::new_v4(),
         user_id,
         token_hash,
         expires_at,
         user_agent,
-        device_id
+        device_id,
+        device_name
     )
     .fetch_one(exec)
     .await?;
