@@ -42,7 +42,10 @@ impl AppState {
     }
 
     pub fn require_admin(&self, claims: &Claims) -> Result<(), ServerError> {
-        let user_id = claims.sub.parse::<Uuid>().map_err(|_| ServerError::Forbidden)?;
+        let user_id = claims
+            .sub
+            .parse::<Uuid>()
+            .map_err(|_| ServerError::Forbidden)?;
         if !CONFIG.admin.is_admin(&user_id) {
             return Err(ServerError::Forbidden);
         }
@@ -51,10 +54,9 @@ impl AppState {
 
     /// Deletes expired OTP codes
     pub fn spawn_otp_cron_job(&self) {
+        info!("🧹 Starting OTP cron job");
         let cleanup_pool = self.pool.clone();
         let cleanup_interval = Duration::from_secs(CONFIG.otp.cleanup_interval_minutes as u64 * 60);
-
-        info!("🧹 Starting OTP cron job");
 
         tokio::spawn(async move {
             loop {
@@ -70,11 +72,11 @@ impl AppState {
 
     /// Deletes audit logs older than configured retention period
     pub fn spawn_audit_cron_job(&self) {
+        info!("🧹 Starting audit log cron job ");
         let cleanup_pool = self.pool.clone();
-        let cleanup_interval = Duration::from_secs(CONFIG.audit.cleanup_interval_hours as u64 * 3600);
+        let cleanup_interval =
+            Duration::from_secs(CONFIG.audit.cleanup_interval_hours as u64 * 3600);
         let retention_days = CONFIG.audit.retention_days;
-
-        info!("🧹 Starting audit log cron job (retention: {} days)", retention_days);
 
         tokio::spawn(async move {
             loop {
