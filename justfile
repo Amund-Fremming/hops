@@ -18,9 +18,3 @@ generate-keys:
     echo ""
     echo "APP__AUTH__PUBLIC_KEY_BASE64=$(cat /tmp/public.pem | base64 | tr -d '\n')"
     rm /tmp/private.pem /tmp/public.pem
-
-serve-audio:
-    cd src && python3 -m http.server 8080
-
-ngrok:
-    ngrok http 8080

@@ -37,12 +37,12 @@ CREATE TABLE "user_credential" (
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE "refresh_token" (
+CREATE TABLE "session" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "user_id" UUID NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "token_hash" VARCHAR(64) NOT NULL UNIQUE,
+    "refresh_token_hash" VARCHAR(64) NOT NULL UNIQUE,
     "user_agent" TEXT,
-    "device_id" UUID NOT NULL,
+    "device_id" UUID NOT NULL UNIQUE,
     "device_name" VARCHAR(50) NOT NULL,
     "expires_at" TIMESTAMPTZ NOT NULL,
     "revoked_at" TIMESTAMPTZ,
@@ -50,8 +50,8 @@ CREATE TABLE "refresh_token" (
     "last_used_at" TIMESTAMPTZ
 );
 
-CREATE INDEX idx_refresh_token_user_id ON "refresh_token" ("user_id");
-CREATE INDEX idx_refresh_token_token_hash ON "refresh_token" ("token_hash");
+CREATE INDEX idx_session_user_id ON "session" ("user_id");
+CREATE INDEX idx_session_device_token ON "session" ("device_id", "refresh_token_hash");
 
 CREATE TYPE resource_type AS ENUM ('user');
 CREATE TYPE action AS ENUM ('login_success', 'login_failed', 'account_locked', 'password_change');

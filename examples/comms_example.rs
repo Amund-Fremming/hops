@@ -2,10 +2,8 @@ use hops::{adapters::comms::CommsAdapter, ports::comms::CommsPort};
 use tracing::{error, info};
 
 const SMS_FROM: &str = "Hops";
-const CALL_FROM: &str = "+46766860615";
-const TO: &str = "+4792419704";
+const TO: &str = "+4741387142";
 const MESSAGE: &str = "Hello!";
-const AUDIO_URL: &str = "https://4494-62-97-169-16.ngrok-free.app/call.mp3";
 
 #[tokio::main]
 async fn main() {
@@ -23,15 +21,6 @@ async fn main() {
         }
         Err(e) => {
             error!(error = %e, "Failed to send SMS");
-        }
-    }
-
-    match comms.make_call(CALL_FROM, TO, AUDIO_URL).await {
-        Ok(response) => {
-            info!(id = %response.id, state = %response.state, "Call initiated");
-        }
-        Err(e) => {
-            error!(error = %e, "Failed to make call");
         }
     }
 }

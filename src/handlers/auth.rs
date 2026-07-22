@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
+use axum::{Json, Router, extract::State, http::HeaderMap, response::IntoResponse, routing::post};
 use reqwest::StatusCode;
 use tracing::{error, info, warn};
 
@@ -39,17 +39,33 @@ async fn phone_login(
 
 async fn phone_signup(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(req): Json<PhoneSignupRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
     let otp = db::otp::get_otp_by_phone_number(state.get_pool(), &req.phone_number).await?;
 
-    let (user_id, token_response) = state
+    let response = state
         .auth
-        .phone_signup(otp.id, &req.given_name, &req.family_name, &req.password)
+        .phone_signup(
+            otp.id,
+            &req.device_name,
+            user_agent.as_deref(),
+            &req.given_name,
+            &req.family_name,
+            &req.password,
+        )
         .await?;
 
-    info!(user_id = %user_id, "Phone signup successful");
-    Ok((StatusCode::CREATED, Json(token_response)))
+    info!(
+        user_id = %response.user_id,
+        "Phone signup successful"
+    );
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 async fn create_otp(

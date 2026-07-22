@@ -18,6 +18,7 @@
 - [ ] Passwordless login requires given_name/family_name to be optional
 - [ ] Drop email from user, make phone_number non-optional
 - [ ] probably move to another architecture like feature folder (even tough it will break fast because of importing eachother)
+- [ ] limit check on how many devices, the phone login takes in device id, can end up with many sessions if the client is stupid
 
 ### Proposals
 

@@ -11,6 +11,7 @@ pub struct PhoneLoginRequest {
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct PhoneSignupRequest {
+    pub device_name: String,
     pub phone_number: String,
     pub password: String,
     #[validate(regex(path = *crate::NAME_REGEX))]

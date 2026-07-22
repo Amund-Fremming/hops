@@ -1,7 +1,9 @@
 -- Add migration script here
 DROP TABLE IF EXISTS "otp";
 DROP TABLE IF EXISTS "audit_log";
-DROP TABLE IF EXISTS "refresh_token";
+DROP TYPE IF EXISTS "action";
+DROP TYPE IF EXISTS "resource_type";
+DROP TABLE IF EXISTS "session";
 DROP TABLE IF EXISTS "user_credential";
 DROP TABLE IF EXISTS "user_identity";
 DROP INDEX IF EXISTS idx_user_email;

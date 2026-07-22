@@ -3,7 +3,7 @@ use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
 use crate::error::ServerError;
-use crate::models::auth::{LoginObject, ProviderType, RefreshToken, UserCredential, UserIdentity};
+use crate::models::auth::{LoginObject, ProviderType, Session, UserCredential, UserIdentity};
 
 pub async fn create_identity<'e, E>(
     exec: E,
@@ -32,6 +32,28 @@ where
     Ok(identity)
 }
 
+pub async fn get_credential(
+    pool: &Pool<Postgres>,
+    user_id: Uuid,
+    provider_type: &ProviderType,
+) -> Result<Option<UserCredential>, ServerError> {
+    let credential = sqlx::query_as!(
+        UserCredential,
+        r#"
+        SELECT uc.id, uc.identity_id, uc.password_hash, uc.failed_attempts, uc.locked_until, uc.created_at, uc.updated_at
+        FROM user_credential uc
+        INNER JOIN user_identity ui ON uc.identity_id = ui.id
+        WHERE ui.user_id = $1 AND ui.provider_type = $2 AND uc.locked_until IS NULL
+        "#,
+        user_id,
+        provider_type.as_str()
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(credential)
+}
+
 pub async fn create_credential<'e, E>(
     exec: E,
     identity_id: Uuid,
@@ -55,6 +77,26 @@ where
     .await?;
 
     Ok(credential)
+}
+
+pub async fn set_credential_password(
+    pool: &Pool<Postgres>,
+    credential_id: Uuid,
+    password_hash: &str,
+) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE user_credential
+        SET password_hash = $1, updated_at = NOW()
+        WHERE id = $2
+        "#,
+        password_hash,
+        credential_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn get_phone_login_object(
@@ -121,47 +163,47 @@ pub async fn reset_failed_attempts(
     Ok(())
 }
 
-pub async fn find_refresh_token(
+pub async fn find_session(
     pool: &Pool<Postgres>,
     token_hash: &str,
-) -> Result<Option<RefreshToken>, ServerError> {
-    let token = sqlx::query_as!(
-        RefreshToken,
+) -> Result<Option<Session>, ServerError> {
+    let session = sqlx::query_as!(
+        Session,
         r#"
-        SELECT id, user_id, token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
-        FROM refresh_token
-        WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()
+        SELECT id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        FROM session
+        WHERE refresh_token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()
         "#,
         token_hash
     )
     .fetch_optional(pool)
     .await?;
 
-    Ok(token)
+    Ok(session)
 }
 
-pub async fn create_refresh_token<'e, E>(
+pub async fn create_session<'e, E>(
     exec: E,
     user_id: Uuid,
-    token_hash: &str,
+    device_id: Uuid,
+    device_name: &str,
+    refresh_token_hash: &str,
     expires_at: DateTime<Utc>,
     user_agent: Option<&str>,
-    device_id: Uuid,
-    device_name: String,
-) -> Result<RefreshToken, ServerError>
+) -> Result<Session, ServerError>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let token = sqlx::query_as!(
-        RefreshToken,
+    let session = sqlx::query_as!(
+        Session,
         r#"
-        INSERT INTO refresh_token (id, user_id, token_hash, expires_at, user_agent, device_id, device_name)
+        INSERT INTO session (id, user_id, refresh_token_hash, expires_at, user_agent, device_id, device_name)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, user_id, token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        RETURNING id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
         "#,
         Uuid::new_v4(),
         user_id,
-        token_hash,
+        refresh_token_hash,
         expires_at,
         user_agent,
         device_id,
@@ -170,5 +212,63 @@ where
     .fetch_one(exec)
     .await?;
 
-    Ok(token)
+    Ok(session)
+}
+
+pub async fn get_session(
+    pool: &Pool<Postgres>,
+    device_id: Uuid,
+    token_hash: &str,
+) -> Result<Option<Session>, ServerError> {
+    let session = sqlx::query_as!(
+        Session,
+        r#"
+        SELECT id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        FROM session
+        WHERE refresh_token_hash = $1 AND device_id = $2 AND revoked_at IS NULL AND expires_at > NOW()
+        "#,
+        token_hash,
+        device_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(session)
+}
+
+pub async fn expire_session(pool: &Pool<Postgres>, session_id: Uuid) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE session
+        SET revoked_at = NOW()
+        WHERE id = $1
+        "#,
+        session_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn update_session(
+    pool: &Pool<Postgres>,
+    session_id: Uuid,
+    new_token_hash: &str,
+    expires_at: DateTime<Utc>,
+) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE session
+        SET refresh_token_hash = $1, expires_at = $2, last_used_at = NOW()
+        WHERE id = $3
+        "#,
+        new_token_hash,
+        expires_at,
+        session_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

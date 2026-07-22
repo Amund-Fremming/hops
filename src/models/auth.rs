@@ -1,16 +1,39 @@
+use std::fmt;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use rsa::{RsaPublicKey, pkcs8::DecodePublicKey, traits::PublicKeyParts};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::ServerError;
+use crate::{config::CONFIG, error::ServerError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
+    pub user_id: Uuid,
+    pub device_id: Uuid,
     pub access_token: String,
     pub refresh_token: String,
-    pub expires_in: i64,
+    access_token_expiry: i64,
+    refresh_token_expiry: i64,
+}
+
+impl TokenResponse {
+    pub fn new(
+        user_id: Uuid,
+        device_id: Uuid,
+        access_token: String,
+        refresh_token: String,
+    ) -> Self {
+        Self {
+            user_id,
+            device_id,
+            access_token,
+            refresh_token,
+            access_token_expiry: CONFIG.auth.access_token_lifetime_minutes,
+            refresh_token_expiry: CONFIG.auth.refresh_token_lifetime_days,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +99,7 @@ pub struct UserIdentity {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug)]
 pub enum ProviderType {
     Phone,
     Email,
@@ -89,6 +113,12 @@ impl ProviderType {
             Self::Email => "email",
             Self::Social => "social",
         }
+    }
+}
+
+impl fmt::Display for ProviderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -112,10 +142,10 @@ pub struct UserCredential {
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
-pub struct RefreshToken {
+pub struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub token_hash: String,
+    pub refresh_token_hash: String,
     pub user_agent: Option<String>,
     pub device_id: Uuid,
     pub device_name: String,
