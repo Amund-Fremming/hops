@@ -5,7 +5,7 @@ use argon2::{
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
-use crate::ports::crypto::CryptoPort;
+use crate::ports::crypto::{CryptoError, CryptoPort};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -33,19 +33,19 @@ impl CryptoPort for CryptoAdapter {
         hash == expected_hash
     }
 
-    fn hash_password(&self, password: &str) -> Result<String, String> {
+    fn hash_password(&self, password: &str) -> Result<String, CryptoError> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
 
         argon2
             .hash_password(password.as_bytes(), &salt)
-            .map(|hash| hash.to_string())
-            .map_err(|e| format!("Failed to hash password: {e}"))
+            .map(|h| h.to_string())
+            .map_err(|e| CryptoError::HashFailed(e.to_string()))
     }
 
-    fn verify_password(&self, password: &str, hash: &str) -> Result<bool, String> {
+    fn verify_password(&self, password: &str, hash: &str) -> Result<bool, CryptoError> {
         let parsed_hash =
-            PasswordHash::new(hash).map_err(|e| format!("Invalid password hash: {e}"))?;
+            PasswordHash::new(hash).map_err(|e| CryptoError::InvalidHash(e.to_string()))?;
 
         Ok(Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)

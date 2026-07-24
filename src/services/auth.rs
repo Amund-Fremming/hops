@@ -15,22 +15,17 @@ use crate::{
     db::{
         self,
         audit::create_audit,
-        auth::{get_phone_login_object, increment_failed_attempts, reset_failed_attempts},
+        auth::{
+            create_credential, create_identity, get_phone_login_object, increment_failed_attempts,
+            reset_failed_attempts,
+        },
+        otp::get_otp_by_id,
         user::{create_user, is_phone_in_use},
     },
     error::ServerError,
     models::{
-        audit::{AuditBuilder, ResourceType},
-        auth::ProviderType,
-    },
-};
-use crate::{
-    db::{
-        auth::{create_credential, create_identity},
-        otp::get_otp_by_id,
-    },
-    models::{
-        auth::{Claims, Jwk, Jwks, TokenResponse},
+        audit::{Action, AuditBuilder, ResourceType},
+        auth::{Claims, Jwk, Jwks, ProviderType, TokenResponse},
         user::User,
     },
     ports::crypto::CryptoPort,
@@ -127,6 +122,27 @@ impl AuthService {
         refresh_token
     }
 
+    fn audit_suspicious(&self, user_id: Uuid, description: &str) {
+        let pool = self.pool.clone();
+        let description = description.to_string();
+
+        tokio::spawn(async move {
+            let log = AuditBuilder::new()
+                .resource_id(user_id)
+                .resource_type(ResourceType::User)
+                .action(Action::Suspicious)
+                .metadata(json!({ "description": description }))
+                .build();
+
+            if let Err(e) = create_audit(&pool, &log).await {
+                error!(
+                    error = %e,
+                    "Failed to create suspicious audit log"
+                );
+            }
+        });
+    }
+
     /// TODO:
     /// - optimize 5/6 database trips
     pub async fn phone_signup(
@@ -160,10 +176,7 @@ impl AuthService {
         let identity =
             create_identity(&mut *tx, user.id, ProviderType::Phone, &phone_number).await?;
 
-        let password_hash = self
-            .crypto
-            .hash_password(password)
-            .map_err(|e| ServerError::Auth(e))?;
+        let password_hash = self.crypto.hash_password(password)?;
 
         create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
@@ -215,11 +228,10 @@ impl AuthService {
 
         let is_valid = self
             .crypto
-            .verify_password(password, &login_object.password_hash)
-            .map_err(|e| ServerError::Auth(e))?;
+            .verify_password(password, &login_object.password_hash)?;
 
         if !is_valid {
-            // TODO - audit log suspicious
+            self.audit_suspicious(login_object.user_id, "Login failed: wrong password");
             warn!(phone_number = %phone_number, "Login failed: wrong password");
             increment_failed_attempts(&self.pool, login_object.identity_id).await?;
             return Err(ServerError::Auth("Login failed".to_string()));
@@ -274,7 +286,7 @@ impl AuthService {
         let Some(user_credential) =
             db::auth::get_credential(&self.pool, user_id, &provider_type).await?
         else {
-            // TODO - audit log suspicious
+            self.audit_suspicious(user_id, "Tried setting password on non-existent provider");
             warn!(
                 user_id = %user_id,
                 provider_type = %provider_type,
@@ -283,12 +295,18 @@ impl AuthService {
             return Err(ServerError::Forbidden);
         };
 
+        if old_password == new_password {
+            return Err(ServerError::Auth(
+                "New password must differ from current".to_string(),
+            ));
+        }
+
         let valid_old_password = self
             .crypto
-            .verify(old_password, &user_credential.password_hash);
+            .verify_password(old_password, &user_credential.password_hash)?;
 
         if !valid_old_password {
-            // TODO - audit log suspicious
+            self.audit_suspicious(user_id, "Tried setting password with invalid old password");
             warn!(
                 user_id = %user_id,
                 provider_type = %provider_type,
@@ -297,8 +315,7 @@ impl AuthService {
             return Err(ServerError::Forbidden);
         }
 
-        // TODO - check that this dont match the old password or any older passwords, then retunr some messatge to be displayed to frontendn
-        let new_password_hash = self.crypto.hash(new_password);
+        let new_password_hash = self.crypto.hash_password(new_password)?;
         db::auth::set_credential_password(&self.pool, user_credential.id, &new_password_hash)
             .await?;
 
@@ -329,7 +346,7 @@ impl AuthService {
             .verify(&refresh_token, &session.refresh_token_hash);
 
         if !valid_token {
-            // TODO - audit log suspicious
+            self.audit_suspicious(user_id, "Invalid refresh token attempt");
             warn!(
                 session_id = %session.id,
                 device_id = %device_id,
@@ -365,7 +382,15 @@ impl AuthService {
             access_token,
             refresh_token,
             access_expires_in: self.config.access_token_lifetime_minutes,
-            refresh_expires_in: self.config.refresh_token_lifetime_days,
+            refresh_expires_in: self.config.refresh_token_lifetime_days * 24 * 60,
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    /*
+    Add tests for
+    -
+    */
 }

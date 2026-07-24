@@ -24,6 +24,7 @@ pub enum Action {
     LoginFailed,
     AccountLocked,
     PasswordChange,
+    Suspicious,
 }
 
 impl Action {
@@ -33,6 +34,7 @@ impl Action {
             Self::LoginFailed => "login_failed",
             Self::LoginSuccess => "login_success",
             Self::PasswordChange => "password_change",
+            Self::Suspicious => "suspicious",
         }
     }
 }

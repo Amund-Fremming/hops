@@ -3,6 +3,7 @@ use reqwest::StatusCode;
 use tracing::{error, warn};
 
 pub use crate::models::otp::OtpError;
+use crate::ports::crypto::CryptoError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
@@ -14,6 +15,9 @@ pub enum ServerError {
 
     #[error("Auth error: {0}")]
     Auth(String),
+
+    #[error("Crypto error: {0}")]
+    Crypto(#[from] CryptoError),
 
     #[error("Not found")]
     NotFound,
@@ -54,6 +58,13 @@ impl IntoResponse for ServerError {
             Self::Auth(msg) => {
                 warn!("Auth error: {}", msg);
                 (StatusCode::UNAUTHORIZED, msg)
+            }
+            Self::Crypto(err) => {
+                error!("Crypto error: {}", err);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Cryptographic error".to_string(),
+                )
             }
             Self::NotFound => {
                 warn!("Resource not found");

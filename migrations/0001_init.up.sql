@@ -54,7 +54,7 @@ CREATE INDEX idx_session_user_id ON "session" ("user_id");
 CREATE INDEX idx_session_device_token ON "session" ("device_id", "refresh_token_hash");
 
 CREATE TYPE resource_type AS ENUM ('user');
-CREATE TYPE action AS ENUM ('login_success', 'login_failed', 'account_locked', 'password_change');
+CREATE TYPE action AS ENUM ('login_success', 'login_failed', 'account_locked', 'password_change', 'suspicious');
 
 CREATE TABLE "audit_log" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
