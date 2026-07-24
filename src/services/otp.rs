@@ -65,7 +65,6 @@ impl OtpService {
         {
             error!(
                 otp_id = %response.otp_id,
-                phone_number = %phone_number,
                 error = %e,
                 "Failed to send OTP, deleting entry"
             );
@@ -74,7 +73,7 @@ impl OtpService {
             return Err(OtpError::SmsFailed);
         }
 
-        info!(phone_number = %phone_number, "Created OTP entry");
+        info!(otp_id = %response.otp_id, "Created OTP entry");
 
         Ok(response)
     }
@@ -87,29 +86,19 @@ impl OtpService {
         }
 
         if otp.is_max_attempts_exceeded(self.config.max_attempts as i32) {
-            return Err(OtpError::MaxAttemptsExceeded);
+            return Err(OtpError::WrongCode); // Hide lock state from attacker
         }
 
         let valid_code = self.crypto.verify(code, &otp.hash);
 
         if !valid_code {
+            let new_count = db::otp::increment_and_get_failed_attempts(&self.pool, otp_id).await?;
+
             warn!(
                 otp_id = %otp_id,
-                code = %code,
-                phone_number = %otp.identifier,
+                failed_attempts = new_count,
                 "Invalid code for OTP"
             );
-
-            let pool = self.pool.clone();
-            tokio::spawn(async move {
-                if let Err(e) = db::otp::increment_failed_attempts(&pool, otp_id).await {
-                    error!(
-                        otp_id = %otp_id,
-                        error = %e,
-                        "Failed to increment failed OTP attempts"
-                    );
-                }
-            });
 
             return Err(OtpError::WrongCode);
         }

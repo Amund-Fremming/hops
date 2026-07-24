@@ -16,6 +16,9 @@ pub enum ServerError {
     #[error("Auth error: {0}")]
     Auth(String),
 
+    #[error("Invalid credentials")]
+    InvalidCredentials,
+
     #[error("Crypto error: {0}")]
     Crypto(#[from] CryptoError),
 
@@ -61,6 +64,10 @@ impl IntoResponse for ServerError {
             Self::Auth(msg) => {
                 warn!("Auth error: {}", msg);
                 (StatusCode::UNAUTHORIZED, msg)
+            }
+            Self::InvalidCredentials => {
+                warn!("Invalid credentials");
+                (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string())
             }
             Self::Crypto(err) => {
                 error!("Crypto error: {}", err);

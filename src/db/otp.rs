@@ -54,22 +54,24 @@ pub async fn get_otp_by_identifier(
     }
 }
 
-pub async fn increment_failed_attempts(
+/// Atomically increments failed_attempts and returns the new count.
+pub async fn increment_and_get_failed_attempts(
     pool: &Pool<Postgres>,
     otp_id: Uuid,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+) -> Result<i32, sqlx::Error> {
+    let new_count = sqlx::query_scalar!(
         r#"
         UPDATE "otp"
         SET failed_attempts = failed_attempts + 1
         WHERE id = $1
+        RETURNING failed_attempts
         "#,
         otp_id
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
-    Ok(())
+    Ok(new_count)
 }
 
 pub async fn mark_verified(pool: &Pool<Postgres>, otp_id: Uuid) -> Result<(), sqlx::Error> {

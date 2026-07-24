@@ -27,14 +27,4 @@
 
 - [ ] add test runtime to use a cache rather than sending actual messages
 - [ ] add last_login_at for tracing user logins without refresh token for metrics
-- [ ] should trace audit logs for failed logins
 - [ ] create otp service, remove crypto from state, and inject into otp service
-
-### CI/CD
-
-- [ ] Audit in actions
-- [ ] Clippy in actions
-- [ ] Fmt in actions
-- [ ] Test in actions
-
-# hops

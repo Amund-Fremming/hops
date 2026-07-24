@@ -131,22 +131,24 @@ pub async fn get_login_credentials(
     Ok(Some(login_object))
 }
 
-pub async fn increment_failed_attempts(
+/// Atomically increments failed_attempts and returns the new count.
+pub async fn increment_and_get_failed_attempts(
     pool: &Pool<Postgres>,
     identity_id: Uuid,
-) -> Result<(), ServerError> {
-    sqlx::query!(
+) -> Result<i32, ServerError> {
+    let new_count = sqlx::query_scalar!(
         r#"
         UPDATE user_credential
         SET failed_attempts = failed_attempts + 1, updated_at = NOW()
         WHERE identity_id = $1
+        RETURNING failed_attempts
         "#,
         identity_id
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
 
-    Ok(())
+    Ok(new_count)
 }
 
 pub async fn reset_failed_attempts(

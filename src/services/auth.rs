@@ -16,7 +16,8 @@ use crate::{
         self,
         audit::create_audit,
         auth::{
-            get_login_credentials, increment_failed_attempts, lock_account, reset_failed_attempts,
+            get_login_credentials, increment_and_get_failed_attempts, lock_account,
+            reset_failed_attempts,
         },
         otp::get_otp_by_id,
         user::is_phone_in_use,
@@ -29,6 +30,10 @@ use crate::{
     },
     ports::crypto::CryptoPort,
 };
+
+/// Dummy Argon2 hash for timing-safe login.
+/// Used when user not found to prevent timing oracle attacks.
+const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$ZHVtbXlzYWx0Zm9ydGltaW5n$K8H8X3Q9Z5Y2W1V0U9T8S7R6Q5P4O3N2M1L0K9J8I7H6";
 
 pub struct AuthService {
     config: AuthConfig,
@@ -95,13 +100,13 @@ impl AuthService {
     }
 
     fn generate_access_token(&self, user_id: Uuid) -> Result<String, ServerError> {
-        let access_token_lifetime = CONFIG.auth.access_token_lifetime_minutes.clone();
+        let access_token_lifetime_seconds = CONFIG.auth.access_token_lifetime_minutes * 60;
 
         let claims = Claims {
             sub: user_id.to_string(),
             iss: self.issuer.clone(),
             aud: vec![self.audience.clone()],
-            exp: (Utc::now().timestamp() + access_token_lifetime) as usize,
+            exp: (Utc::now().timestamp() + access_token_lifetime_seconds) as usize,
             iat: Utc::now().timestamp() as usize,
         };
 
@@ -177,7 +182,7 @@ impl AuthService {
         let identifier = otp.identifier;
 
         if is_phone_in_use(&self.pool, &identifier).await? {
-            warn!(phone_number = %identifier, "Signup attempted with phone number already in use");
+            warn!("Signup attempted with identifier already in use");
             return Err(ServerError::Conflict);
         }
 
@@ -198,7 +203,7 @@ impl AuthService {
         let mut tx = self.pool.begin().await?;
         db::user::create_user(&mut *tx, &user).await?;
         let identity =
-            db::auth::create_identity(&mut *tx, user.id, ProviderType::Phone, &identifier).await?;
+            db::auth::create_identity(&mut *tx, user.id, provider_type, &identifier).await?;
         db::auth::create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
 
@@ -226,6 +231,8 @@ impl AuthService {
         Utc::now() + Duration::from_hours(24 * CONFIG.auth.refresh_token_lifetime_days as u64)
     }
 
+    /// Returns the same error even tough errors differ.
+    /// This is done to prevent attackers gaining info.
     pub async fn login(
         &self,
         device_id: Uuid,
@@ -238,53 +245,56 @@ impl AuthService {
         let max_attempts = CONFIG.auth.max_failed_login_attempts;
         let lock_hours = CONFIG.auth.account_lock_hours;
 
-        let Some(login_object) =
-            get_login_credentials(&self.pool, identifier, provider_type).await?
-        else {
-            warn!(phone_number = %identifier, "Login failed: could not find user with credentials");
-            return Err(ServerError::NotFound);
+        let login_object = get_login_credentials(&self.pool, identifier, provider_type).await?;
+
+        // Always verify password to prevent timing oracle (use dummy hash if user not found)
+        let hash_to_verify = login_object
+            .as_ref()
+            .map(|l| l.password_hash.as_str())
+            .unwrap_or(DUMMY_PASSWORD_HASH);
+
+        let is_valid = self.crypto.verify_password(password, hash_to_verify)?;
+
+        let Some(login_object) = login_object else {
+            warn!(identifier = %identifier, "Login failed: user not found");
+            return Err(ServerError::InvalidCredentials);
         };
 
         if login_object.is_locked() {
-            warn!(phone_number = %identifier, "Login failed: account locked");
-            return Err(ServerError::AccountLocked);
+            warn!(identifier = %identifier, "Login failed: account locked");
+            return Err(ServerError::InvalidCredentials);
         }
-
-        let is_valid = self
-            .crypto
-            .verify_password(password, &login_object.password_hash)?;
 
         if !is_valid {
             self.audit_suspicious(login_object.user_id, "Login failed: wrong password");
-            warn!(phone_number = %identifier, "Login failed: wrong password");
-            increment_failed_attempts(&self.pool, login_object.identity_id).await?;
+            warn!(user_id = %login_object.user_id, "Login failed: wrong password");
 
-            if login_object.failed_attempts + 1 >= max_attempts {
+            let new_count =
+                increment_and_get_failed_attempts(&self.pool, login_object.identity_id).await?;
+
+            if new_count >= max_attempts {
                 lock_account(&self.pool, login_object.identity_id, lock_hours).await?;
                 self.audit_account_locked(login_object.user_id, lock_hours);
-                warn!(phone_number = %identifier, "Account locked due to max failed attempts");
+                warn!(user_id = %login_object.user_id, "Account locked due to max failed attempts");
             }
 
-            return Err(ServerError::Auth("Login failed".to_string()));
+            return Err(ServerError::InvalidCredentials);
         }
 
         reset_failed_attempts(&self.pool, login_object.identity_id).await?;
 
         let user_id = login_object.user_id;
-        let phone_number = identifier.to_string();
         let pool = self.pool.clone();
 
         tokio::task::spawn(async move {
             let log = AuditBuilder::new()
                 .resource_id(user_id)
                 .resource_type(ResourceType::User)
-                .metadata(json!({
-                    "phone_number": phone_number,
-                }))
+                .action(Action::LoginSuccess)
                 .build();
 
             if let Err(e) = create_audit(&pool, &log).await {
-                error!("Failed to create audit log on `phone_login`: {}", e);
+                error!("Failed to create audit log on login: {}", e);
             }
         });
 
@@ -402,7 +412,15 @@ impl AuthService {
                     error = %e,
                     "Failed to update session with new refresh token"
                 );
-            };
+            }
+
+            if let Err(e) = db::user::touch_last_active(&pool, user_id).await {
+                error!(
+                    user_id = %user_id,
+                    error = %e,
+                    "Failed to update user last_active_at"
+                );
+            }
         });
 
         Ok(self.token_response(at, rt))

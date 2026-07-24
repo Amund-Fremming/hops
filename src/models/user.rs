@@ -5,6 +5,19 @@ use validator::{Validate, ValidationError};
 
 use crate::models::auth::ProviderType;
 
+pub const MIN_PASSWORD_LENGTH: usize = 8;
+pub const MAX_PASSWORD_LENGTH: usize = 128;
+
+pub fn validate_password(password: &str) -> Result<(), ValidationError> {
+    if password.len() < MIN_PASSWORD_LENGTH {
+        return Err(ValidationError::new("password_too_short"));
+    }
+    if password.len() > MAX_PASSWORD_LENGTH {
+        return Err(ValidationError::new("password_too_long"));
+    }
+    Ok(())
+}
+
 pub fn validate_identifier(
     provider_type: ProviderType,
     identifier: &str,
@@ -25,17 +38,18 @@ pub fn validate_identifier(
 }
 
 fn validate_login(req: &LoginRequest) -> Result<(), ValidationError> {
-    validate_identifier(req.provider_type, &req.identifier)
+    validate_identifier(req.provider_type, &req.identifier)?;
+    validate_password(&req.password)
 }
 
 fn validate_signup(req: &SignupRequest) -> Result<(), ValidationError> {
-    validate_identifier(req.provider_type, &req.identifier)
+    validate_identifier(req.provider_type, &req.identifier)?;
+    validate_password(&req.password)
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 #[validate(schema(function = "validate_login"))]
 pub struct LoginRequest {
-    #[serde(default)]
     pub device_id: Uuid,
     pub device_name: String,
     pub provider_type: ProviderType,
@@ -68,6 +82,7 @@ pub struct User {
     pub avatar_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_active_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -92,6 +107,7 @@ impl User {
             avatar_url: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            last_active_at: Utc::now(),
         }
     }
 }
@@ -114,6 +130,7 @@ impl From<SignupRequest> for User {
             avatar_url: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            last_active_at: Utc::now(),
         }
     }
 }

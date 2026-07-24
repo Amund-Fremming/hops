@@ -10,6 +10,9 @@ ex-signup:
 reset-db:
     cargo sqlx database reset --force -y
 
+test:
+    cargo test --all-features
+
 generate-keys:
     #!/bin/bash
     openssl genrsa -out /tmp/private.pem 2048 2>/dev/null

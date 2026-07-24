@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         crypto.clone(),
     ));
 
-    let app_state = Arc::new(AppState::new(pool, auth, otp, crypto));
+    let app_state = Arc::new(AppState::new(pool, auth, otp));
     app_state.spawn_otp_cron_job();
     app_state.spawn_audit_cron_job();
 

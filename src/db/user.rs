@@ -10,7 +10,7 @@ pub async fn get_user(pool: &Pool<Postgres>, id: Uuid) -> Result<Option<User>, S
     let user = sqlx::query_as!(
         User,
         r#"
-        SELECT id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
+        SELECT id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at, last_active_at
         FROM "user"
         WHERE id = $1
         "#,
@@ -30,7 +30,7 @@ pub async fn list_users(
     let users = sqlx::query_as!(
         User,
         r#"
-        SELECT id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
+        SELECT id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at, last_active_at
         FROM "user"
         ORDER BY created_at DESC
         LIMIT $1 OFFSET $2
@@ -53,7 +53,7 @@ where
         r#"
         INSERT INTO "user" (id, phone_number, phone_number_verified, email, email_verified, given_name, family_name)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at
+        RETURNING id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at, last_active_at
         "#,
         user.id,
         user.phone_number,
@@ -142,4 +142,19 @@ pub async fn is_phone_in_use(
     .await?;
 
     Ok(exists)
+}
+
+pub async fn touch_last_active(pool: &Pool<Postgres>, user_id: Uuid) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE "user"
+        SET last_active_at = NOW()
+        WHERE id = $1
+        "#,
+        user_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
