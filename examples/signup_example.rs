@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use hops::adapters::comms::CommsAdapter;
 use hops::adapters::crypto::CryptoAdapter;
@@ -21,6 +22,9 @@ async fn phone_otp_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::
         .create_and_send(PHONE_NUMBER, ProviderType::Phone)
         .await?;
     info!(otp_id = %otp_response.otp_id, "OTP created and sent");
+
+    // Wait for SMS to be delivered
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // 2. In real flow, user enters code received via SMS
     // For testing, we'd need to capture the code before hashing
@@ -49,6 +53,9 @@ async fn phone_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::erro
         .create_and_send(PHONE_NUMBER, ProviderType::Phone)
         .await?;
     info!(otp_id = %otp_response.otp_id, "OTP created for signup");
+
+    // Wait for SMS to be delivered
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // 2. In production: user receives SMS and enters code
     // For this example, we skip verification
@@ -92,6 +99,9 @@ async fn email_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::erro
         .create_and_send(EMAIL, ProviderType::Email)
         .await?;
     info!(otp_id = %otp_response.otp_id, "OTP created for email signup");
+
+    // Wait for email to be delivered
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // 2. In production: user receives email and enters code
     info!("Skipping OTP verification (would need real code from email)");
