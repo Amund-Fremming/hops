@@ -14,7 +14,6 @@
 - [ ] expand the refresh tokens to have session as parent
 - [ ] fix all todos
 - [ ] rate limit refresh token with device id
-- [ ] create sqlx tests for all auth flows so they can be ran in the pipeline
 - [ ] social login with google and apple
 
 ### Auth / Security
