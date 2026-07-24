@@ -39,14 +39,18 @@ impl OtpService {
         }
     }
 
-    pub async fn create_and_send(&self, phone_number: &str) -> Result<OtpResponse, OtpError> {
+    pub async fn create_and_send(
+        &self,
+        phone_number: &str,
+        provider_type: ProviderType,
+    ) -> Result<OtpResponse, OtpError> {
         let code = Otp::generate_code();
         let hash = self.crypto.hash(&code);
 
         let response = db::otp::create_otp(
             &self.pool,
             phone_number,
-            ProviderType::Phone,
+            provider_type,
             &hash,
             self.config.ttl_minutes,
             self.config.max_messages_per_day,
@@ -80,6 +84,10 @@ impl OtpService {
 
     pub async fn verify(&self, otp_id: Uuid, code: &str) -> Result<(), OtpError> {
         let otp = db::otp::get_otp_by_id(&self.pool, otp_id).await?;
+
+        if otp.is_verified() {
+            return Err(OtpError::AlreadyVerified);
+        }
 
         if otp.is_expired() {
             return Err(OtpError::Expired);
@@ -120,6 +128,7 @@ mod test {
     use crate::{
         config::{CommsConfig, OtpConfig},
         models::{
+            auth::ProviderType,
             comms::{SendEmailResponse, SendSmsResponse},
             otp::OtpError,
         },
@@ -263,7 +272,9 @@ mod test {
             crypto,
         );
 
-        let result = service.create_and_send("+4799999999").await;
+        let result = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await;
 
         assert!(result.is_ok());
         assert_eq!(comms.get_call_count(), 1);
@@ -282,7 +293,9 @@ mod test {
             crypto,
         );
 
-        let result = service.create_and_send("+4799999999").await;
+        let result = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await;
 
         assert!(matches!(result, Err(OtpError::SmsFailed)));
         assert_eq!(comms.get_call_count(), 1);
@@ -308,11 +321,19 @@ mod test {
         let service = OtpService::new(config, test_comms_config(), pool, comms.clone(), crypto);
 
         // Send max allowed
-        service.create_and_send("+4799999999").await.unwrap();
-        service.create_and_send("+4799999999").await.unwrap();
+        service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
+        service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // Third should fail
-        let result = service.create_and_send("+4799999999").await;
+        let result = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await;
         assert!(matches!(result, Err(OtpError::MaxMessagesExceeded)));
         assert_eq!(comms.get_call_count(), 2);
     }
@@ -324,7 +345,10 @@ mod test {
 
         let service = OtpService::new(test_otp_config(), test_comms_config(), pool, comms, crypto);
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
         let result = service.verify(response.otp_id, "123456").await;
 
         assert!(result.is_ok());
@@ -343,7 +367,10 @@ mod test {
             crypto,
         );
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         let result = service.verify(response.otp_id, "wrong").await;
         assert!(matches!(result, Err(OtpError::WrongCode)));
@@ -369,7 +396,10 @@ mod test {
 
         let service = OtpService::new(config, test_comms_config(), pool.clone(), comms, crypto);
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // Set failed_attempts to max
         sqlx::query("UPDATE otp SET failed_attempts = 3 WHERE id = $1")
@@ -395,7 +425,10 @@ mod test {
 
         let service = OtpService::new(config, test_comms_config(), pool.clone(), comms, crypto);
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // Set failed_attempts to max - 1
         sqlx::query("UPDATE otp SET failed_attempts = 2 WHERE id = $1")
@@ -422,7 +455,10 @@ mod test {
             crypto,
         );
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // Expire the OTP
         let expired = Utc::now() - Duration::minutes(10);
@@ -462,7 +498,10 @@ mod test {
 
         let service = OtpService::new(config, test_comms_config(), pool.clone(), comms, crypto);
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // Try wrong code 3 times
         for i in 1..=3 {
@@ -503,9 +542,15 @@ mod test {
         let service = OtpService::new(config, test_comms_config(), pool, comms.clone(), crypto);
 
         // Different phone numbers should have independent limits
-        let r1 = service.create_and_send("+4799999991").await;
-        let r2 = service.create_and_send("+4799999992").await;
-        let r3 = service.create_and_send("+4799999993").await;
+        let r1 = service
+            .create_and_send("+4799999991", ProviderType::Phone)
+            .await;
+        let r2 = service
+            .create_and_send("+4799999992", ProviderType::Phone)
+            .await;
+        let r3 = service
+            .create_and_send("+4799999993", ProviderType::Phone)
+            .await;
 
         assert!(r1.is_ok());
         assert!(r2.is_ok());
@@ -514,7 +559,7 @@ mod test {
     }
 
     #[sqlx::test]
-    async fn verify_already_verified_otp_still_works(pool: sqlx::PgPool) {
+    async fn verify_already_verified_otp_is_rejected(pool: sqlx::PgPool) {
         let comms = Arc::new(MockComms::new(false));
         let crypto = Arc::new(MockCrypto::new("hashed_code", true));
 
@@ -526,23 +571,18 @@ mod test {
             crypto,
         );
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // Verify first time
         let result = service.verify(response.otp_id, "123456").await;
         assert!(result.is_ok());
 
-        // Mark as verified
-        sqlx::query("UPDATE otp SET verified_at = NOW() WHERE id = $1")
-            .bind(response.otp_id)
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        // Verify second time - currently allows re-verification
-        // (If this should fail, add a check in verify() method)
+        // Second verification should fail
         let result = service.verify(response.otp_id, "123456").await;
-        assert!(result.is_ok());
+        assert!(matches!(result, Err(OtpError::AlreadyVerified)));
     }
 
     #[sqlx::test]
@@ -558,7 +598,9 @@ mod test {
         let service = OtpService::new(test_otp_config(), comms_config, pool, comms.clone(), crypto);
 
         // Just verify it doesn't panic - template substitution happens internally
-        let result = service.create_and_send("+4799999999").await;
+        let result = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await;
         assert!(result.is_ok());
     }
 
@@ -574,7 +616,9 @@ mod test {
 
         let service = OtpService::new(config, test_comms_config(), pool, comms.clone(), crypto);
 
-        let result = service.create_and_send("+4799999999").await;
+        let result = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await;
         assert!(matches!(result, Err(OtpError::MaxMessagesExceeded)));
         assert_eq!(comms.get_call_count(), 0); // SMS never sent
     }
@@ -591,7 +635,10 @@ mod test {
 
         let service = OtpService::new(config, test_comms_config(), pool, comms, crypto);
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
 
         // First attempt should fail (max_attempts = 0 means locked immediately)
         let result = service.verify(response.otp_id, "123456").await;
@@ -605,7 +652,10 @@ mod test {
 
         let service = OtpService::new(test_otp_config(), test_comms_config(), pool, comms, crypto);
 
-        let response = service.create_and_send("+4799999999").await.unwrap();
+        let response = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await
+            .unwrap();
         let result = service.verify(response.otp_id, "").await;
 
         assert!(matches!(result, Err(OtpError::WrongCode)));
@@ -625,13 +675,17 @@ mod test {
 
         // Create 5 OTPs (at the limit)
         for _ in 0..5 {
-            let result = service.create_and_send("+4799999999").await;
+            let result = service
+                .create_and_send("+4799999999", ProviderType::Phone)
+                .await;
             assert!(result.is_ok());
         }
         assert_eq!(comms.get_call_count(), 5);
 
         // 6th should fail
-        let result = service.create_and_send("+4799999999").await;
+        let result = service
+            .create_and_send("+4799999999", ProviderType::Phone)
+            .await;
         assert!(matches!(result, Err(OtpError::MaxMessagesExceeded)));
         assert_eq!(comms.get_call_count(), 5); // No additional SMS sent
     }

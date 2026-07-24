@@ -1,11 +1,19 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router, extract::State, http::HeaderMap, middleware as axum_mw, response::IntoResponse,
+    Json, Router,
+    extract::State,
+    http::{HeaderMap, HeaderName, HeaderValue, Method},
+    middleware as axum_mw,
+    response::IntoResponse,
     routing::get,
 };
 use serde_json::json;
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
+};
 
 use crate::{
     handlers::{
@@ -47,8 +55,26 @@ pub fn app_routes(state: Arc<AppState>) -> Router {
         .nest("/auth", protected_auth_routes(state.clone()))
         .layer(axum_mw::from_fn_with_state(state, auth_mw));
 
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_headers(Any)
+        .allow_origin(Any);
+
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(TraceLayer::new_for_http())
+        .layer(cors)
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-content-type-options"),
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-frame-options"),
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-xss-protection"),
+            HeaderValue::from_static("1; mode=block"),
+        ))
 }

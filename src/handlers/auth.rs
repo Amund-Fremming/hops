@@ -15,7 +15,6 @@ use axum::{
     routing::{get, post},
 };
 use reqwest::StatusCode;
-use tracing::info;
 
 use crate::{
     db,
@@ -47,7 +46,7 @@ async fn list_sessions(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let user_id = claims.user_id();
+    let user_id = claims.user_id()?;
     let sessions = db::auth::list_session_dtos(state.get_pool(), user_id).await?;
     Ok((StatusCode::OK, Json(sessions)))
 }
@@ -78,7 +77,6 @@ async fn login(
 
 async fn signup(
     State(state): State<Arc<AppState>>,
-    Extension(claims): Extension<Claims>,
     headers: HeaderMap,
     Json(req): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
@@ -102,10 +100,6 @@ async fn signup(
         )
         .await?;
 
-    info!(
-        user_id = %claims.user_id(),
-        "Phone signup successful"
-    );
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -113,7 +107,14 @@ async fn create_otp(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateOtpRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let response = state.otp.create_and_send(&req.phone_number).await?;
+    req.validate()
+        .map_err(|e| ServerError::Validation(e.to_string()))?;
+
+    let response = state
+        .otp
+        .create_and_send(&req.phone_number, req.provider_type)
+        .await?;
+
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -122,6 +123,9 @@ async fn verify_otp(
     State(state): State<Arc<AppState>>,
     Json(req): Json<VerifyOtpRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
+    req.validate()
+        .map_err(|e| ServerError::Validation(e.to_string()))?;
+
     state.otp.verify(req.otp_id, &req.code).await?;
     Ok(StatusCode::OK)
 }

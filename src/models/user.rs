@@ -15,6 +15,12 @@ pub fn validate_password(password: &str) -> Result<(), ValidationError> {
     if password.len() > MAX_PASSWORD_LENGTH {
         return Err(ValidationError::new("password_too_long"));
     }
+    if !password.chars().any(|c| c.is_ascii_uppercase()) {
+        return Err(ValidationError::new("password_missing_uppercase"));
+    }
+    if !password.chars().any(|c| c.is_ascii_digit()) {
+        return Err(ValidationError::new("password_missing_digit"));
+    }
     Ok(())
 }
 
@@ -91,6 +97,7 @@ pub struct PatchUserRequest {
     pub given_name: Option<String>,
     #[validate(regex(path = *crate::NAME_REGEX))]
     pub family_name: Option<String>,
+    #[validate(url)]
     pub avatar_url: Option<String>,
 }
 

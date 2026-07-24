@@ -11,7 +11,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    config::{AuthConfig, CONFIG},
+    config::AuthConfig,
     db::{
         self,
         audit::create_audit,
@@ -20,7 +20,7 @@ use crate::{
             reset_failed_attempts,
         },
         otp::get_otp_by_id,
-        user::is_phone_in_use,
+        user::is_identifier_in_use,
     },
     error::ServerError,
     models::{
@@ -72,9 +72,8 @@ impl AuthService {
         let decoding_key = DecodingKey::from_rsa_pem(public_key_pem.as_bytes())
             .map_err(|e| ServerError::Auth(format!("Invalid public key: {}", e)))?;
 
-        let jwk1 = Jwk::new("key-1", public_key_pem)?;
-        let jwk2 = Jwk::new("key-2", public_key_pem)?;
-        let jwks = Jwks { keys: [jwk1, jwk2] };
+        let jwk = Jwk::new("key-1", public_key_pem)?;
+        let jwks = Jwks { keys: [jwk] };
 
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_audience(&[audience]);
@@ -109,7 +108,7 @@ impl AuthService {
     }
 
     fn generate_access_token(&self, user_id: Uuid) -> Result<String, ServerError> {
-        let access_token_lifetime_seconds = CONFIG.auth.access_token_lifetime_minutes * 60;
+        let access_token_lifetime_seconds = self.config.access_token_lifetime_minutes * 60;
 
         let claims = Claims {
             sub: user_id.to_string(),
@@ -126,7 +125,6 @@ impl AuthService {
         Ok(access_token)
     }
 
-    /// Refresh token + hash
     fn generate_refresh_token(&self) -> String {
         let refresh_token = {
             let bytes: [u8; 32] = rand::random();
@@ -190,7 +188,7 @@ impl AuthService {
 
         let identifier = otp.identifier;
 
-        if is_phone_in_use(&self.pool, &identifier).await? {
+        if is_identifier_in_use(&self.pool, provider_type, &identifier).await? {
             warn!("Signup attempted with identifier already in use");
             return Err(ServerError::Conflict);
         }
@@ -220,7 +218,7 @@ impl AuthService {
         let at = self.generate_access_token(user.id)?;
         let rt = self.generate_refresh_token();
         let rt_hash = self.crypto.hash(&rt);
-        let rt_expiry = Self::refresh_token_expiry();
+        let rt_expiry = self.refresh_token_expiry();
 
         db::auth::create_session(
             &self.pool,
@@ -236,8 +234,8 @@ impl AuthService {
         Ok(self.token_response(at, rt))
     }
 
-    fn refresh_token_expiry() -> DateTime<Utc> {
-        Utc::now() + Duration::from_hours(24 * CONFIG.auth.refresh_token_lifetime_days as u64)
+    fn refresh_token_expiry(&self) -> DateTime<Utc> {
+        Utc::now() + Duration::from_hours(24 * self.config.refresh_token_lifetime_days as u64)
     }
 
     /// Returns the same error even tough errors differ.
@@ -251,8 +249,8 @@ impl AuthService {
         provider_type: ProviderType,
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
-        let max_attempts = CONFIG.auth.max_failed_login_attempts;
-        let lock_hours = CONFIG.auth.account_lock_hours;
+        let max_attempts = self.config.max_failed_login_attempts;
+        let lock_hours = self.config.account_lock_hours;
 
         let login_object = get_login_credentials(&self.pool, identifier, provider_type).await?;
 
@@ -265,7 +263,7 @@ impl AuthService {
         let is_valid = self.crypto.verify_password(password, hash_to_verify)?;
 
         let Some(login_object) = login_object else {
-            warn!(identifier = %identifier, "Login failed: user not found");
+            warn!(device_id = %device_id, "Login failed: user not found");
             return Err(ServerError::InvalidCredentials);
         };
 
@@ -310,7 +308,7 @@ impl AuthService {
         let at = self.generate_access_token(user_id)?;
         let rt = self.generate_refresh_token();
         let rt_hash = self.crypto.hash(&rt);
-        let rt_expiry = Self::refresh_token_expiry();
+        let rt_expiry = self.refresh_token_expiry();
 
         db::auth::upsert_session(
             &self.pool,
@@ -398,49 +396,33 @@ impl AuthService {
         if !valid_token {
             self.audit_suspicious(user_id, "Invalid refresh token attempt");
             warn!(
-                session_id = %session.id,
                 device_id = %device_id,
                 "Invalid refresh token, invalidating session"
             );
-            db::auth::expire_session(&self.pool, session.id).await?;
+            db::auth::expire_session(&self.pool, device_id).await?;
             return Err(ServerError::Forbidden);
         }
 
         let at = self.generate_access_token(user_id)?;
         let rt = self.generate_refresh_token();
         let rt_hash = self.crypto.hash(&rt);
-        let rt_expiry = Self::refresh_token_expiry();
-        let session_id = session.id;
-        let pool = self.pool.clone();
+        let rt_expiry = self.refresh_token_expiry();
 
-        tokio::spawn(async move {
-            if let Err(e) = db::auth::update_session(&pool, session_id, &rt_hash, rt_expiry).await {
-                error!(
-                    user_id = %user_id,
-                    session_id = %session_id,
-                    error = %e,
-                    "Failed to update session with new refresh token"
-                );
-            }
-
-            if let Err(e) = db::user::touch_last_active(&pool, user_id).await {
-                error!(
-                    user_id = %user_id,
-                    error = %e,
-                    "Failed to update user last_active_at"
-                );
-            }
-        });
+        db::auth::update_session(&self.pool, device_id, &rt_hash, rt_expiry).await?;
+        db::user::touch_last_active(&self.pool, user_id).await?;
 
         Ok(self.token_response(at, rt))
     }
 
     fn token_response(&self, access_token: String, refresh_token: String) -> TokenResponse {
+        let access_expires_in_secs = self.config.access_token_lifetime_minutes * 60;
+        let refresh_expires_in_secs = self.config.refresh_token_lifetime_days * 24 * 60 * 60;
+
         TokenResponse {
             access_token,
             refresh_token,
-            access_expires_in: self.config.access_token_lifetime_minutes,
-            refresh_expires_in: self.config.refresh_token_lifetime_days * 24 * 60,
+            access_expires_in: access_expires_in_secs,
+            refresh_expires_in: refresh_expires_in_secs,
         }
     }
 }
@@ -660,7 +642,7 @@ tBkZIjFGA4t6duE5OAPX9muXdFFcLsTsgU/UFVgu2Tf83+jgsqsq2qV6JymAXZFi
         let service = create_test_service();
         let jwks = service.get_jwks();
 
-        assert_eq!(jwks.keys.len(), 2);
+        assert_eq!(jwks.keys.len(), 1);
     }
 
     #[tokio::test]
@@ -668,9 +650,7 @@ tBkZIjFGA4t6duE5OAPX9muXdFFcLsTsgU/UFVgu2Tf83+jgsqsq2qV6JymAXZFi
         let service = create_test_service();
         let jwks = service.get_jwks();
 
-        assert_ne!(jwks.keys[0].kid, jwks.keys[1].kid);
         assert_eq!(jwks.keys[0].kid, "key-1");
-        assert_eq!(jwks.keys[1].kid, "key-2");
     }
 
     #[tokio::test]
@@ -854,14 +834,15 @@ tBkZIjFGA4t6duE5OAPX9muXdFFcLsTsgU/UFVgu2Tf83+jgsqsq2qV6JymAXZFi
 
         assert_eq!(response.access_token, at);
         assert_eq!(response.refresh_token, rt);
-        assert_eq!(response.access_expires_in, 15); // 15 minutes
-        assert_eq!(response.refresh_expires_in, 30 * 24 * 60); // 30 days in minutes
+        assert_eq!(response.access_expires_in, 15 * 60);
+        assert_eq!(response.refresh_expires_in, 30 * 24 * 60 * 60);
     }
 
     #[tokio::test]
     async fn refresh_token_expiry_is_future_date() {
+        let service = create_test_service();
         let now = Utc::now();
-        let expiry = AuthService::refresh_token_expiry();
+        let expiry = service.refresh_token_expiry();
 
         assert!(expiry > now);
     }
@@ -894,5 +875,113 @@ tBkZIjFGA4t6duE5OAPX9muXdFFcLsTsgU/UFVgu2Tf83+jgsqsq2qV6JymAXZFi
             TEST_ISSUER,
         )
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn validate_token_rejects_alg_none_tokens() {
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+
+        // Craft a token with alg=none (no signature)
+        let header = r#"{"alg":"none","typ":"JWT"}"#;
+        let claims = serde_json::json!({
+            "sub": user_id.to_string(),
+            "iss": TEST_ISSUER,
+            "aud": [TEST_AUDIENCE],
+            "exp": (Utc::now().timestamp() + 3600) as usize,
+            "iat": Utc::now().timestamp() as usize,
+        });
+
+        let header_b64 = URL_SAFE_NO_PAD.encode(header.as_bytes());
+        let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string().as_bytes());
+
+        // alg=none token has empty signature
+        let token = format!("{}.{}.", header_b64, claims_b64);
+
+        let result = service.validate_token(&token);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_token_rejects_hs256_signed_tokens() {
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+
+        // Algorithm confusion: sign with HS256 using the public key as secret
+        let header = r#"{"alg":"HS256","typ":"JWT"}"#;
+        let claims = serde_json::json!({
+            "sub": user_id.to_string(),
+            "iss": TEST_ISSUER,
+            "aud": [TEST_AUDIENCE],
+            "exp": (Utc::now().timestamp() + 3600) as usize,
+            "iat": Utc::now().timestamp() as usize,
+        });
+
+        let header_b64 = URL_SAFE_NO_PAD.encode(header.as_bytes());
+        let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string().as_bytes());
+        let message = format!("{}.{}", header_b64, claims_b64);
+
+        // Sign with public key as HMAC secret (algorithm confusion attack)
+        type HmacSha256 = Hmac<Sha256>;
+        let mut mac = HmacSha256::new_from_slice(TEST_PUBLIC_KEY_PEM.as_bytes()).unwrap();
+        mac.update(message.as_bytes());
+        let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+
+        let token = format!("{}.{}", message, signature);
+
+        let result = service.validate_token(&token);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_token_rejects_tokens_missing_sub() {
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+
+        let service = create_test_service();
+
+        // Create claims without 'sub' field
+        let header = r#"{"alg":"RS256","typ":"JWT"}"#;
+        let claims = serde_json::json!({
+            "iss": TEST_ISSUER,
+            "aud": [TEST_AUDIENCE],
+            "exp": (Utc::now().timestamp() + 3600) as usize,
+            "iat": Utc::now().timestamp() as usize,
+            // No "sub" field
+        });
+
+        let header_b64 = URL_SAFE_NO_PAD.encode(header.as_bytes());
+        let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string().as_bytes());
+        let message = format!("{}.{}", header_b64, claims_b64);
+
+        // We need to sign a custom payload, so we'll use raw signing
+        use rsa::{Pkcs1v15Sign, RsaPrivateKey, pkcs8::DecodePrivateKey};
+        use sha2::{Digest, Sha256};
+
+        let private_key = RsaPrivateKey::from_pkcs8_pem(TEST_PRIVATE_KEY_PEM).unwrap();
+        let mut hasher = Sha256::new();
+        hasher.update(message.as_bytes());
+        let digest = hasher.finalize();
+
+        let signature = private_key
+            .sign(Pkcs1v15Sign::new::<Sha256>(), &digest)
+            .unwrap();
+        let sig_b64 = URL_SAFE_NO_PAD.encode(&signature);
+
+        let token = format!("{}.{}", message, sig_b64);
+
+        let result = service.validate_token(&token);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
     }
 }

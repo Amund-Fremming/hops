@@ -13,7 +13,7 @@ async fn me(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let user_id = claims.user_id();
+    let user_id = claims.user_id()?;
     match db::user::get_user(state.get_pool(), user_id).await? {
         Some(user) => Ok((StatusCode::OK, Json(user))),
         None => Err(ServerError::NotFound),

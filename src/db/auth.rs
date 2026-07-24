@@ -45,7 +45,7 @@ pub async fn get_credential(
         SELECT uc.id, uc.identity_id, uc.password_hash, uc.failed_attempts, uc.locked_until, uc.created_at, uc.updated_at
         FROM user_credential uc
         INNER JOIN user_identity ui ON uc.identity_id = ui.id
-        WHERE ui.user_id = $1 AND ui.provider_type = $2 AND uc.locked_until IS NULL
+        WHERE ui.user_id = $1 AND ui.provider_type = $2
         "#,
         user_id,
         *provider_type as ProviderType
@@ -189,25 +189,6 @@ pub async fn lock_account(
     Ok(())
 }
 
-pub async fn find_session(
-    pool: &Pool<Postgres>,
-    token_hash: &str,
-) -> Result<Option<Session>, ServerError> {
-    let session = sqlx::query_as!(
-        Session,
-        r#"
-        SELECT id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
-        FROM session
-        WHERE refresh_token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW()
-        "#,
-        token_hash
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(session)
-}
-
 pub async fn create_session<'e, E>(
     exec: E,
     user_id: Uuid,
@@ -223,16 +204,15 @@ where
     let session = sqlx::query_as!(
         Session,
         r#"
-        INSERT INTO session (id, user_id, refresh_token_hash, expires_at, user_agent, device_id, device_name)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        INSERT INTO session (device_id, user_id, refresh_token_hash, expires_at, user_agent, device_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING device_id, user_id, refresh_token_hash, user_agent, device_name, expires_at, revoked_at, created_at, last_used_at
         "#,
-        Uuid::new_v4(),
+        device_id,
         user_id,
         refresh_token_hash,
         expires_at,
         user_agent,
-        device_id,
         device_name
     )
     .fetch_one(exec)
@@ -256,8 +236,8 @@ where
     let session = sqlx::query_as!(
         Session,
         r#"
-        INSERT INTO session (id, user_id, refresh_token_hash, expires_at, user_agent, device_id, device_name)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO session (device_id, user_id, refresh_token_hash, expires_at, user_agent, device_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (device_id) DO UPDATE SET
             refresh_token_hash = EXCLUDED.refresh_token_hash,
             expires_at = EXCLUDED.expires_at,
@@ -265,14 +245,13 @@ where
             device_name = EXCLUDED.device_name,
             revoked_at = NULL,
             last_used_at = NOW()
-        RETURNING id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        RETURNING device_id, user_id, refresh_token_hash, user_agent, device_name, expires_at, revoked_at, created_at, last_used_at
         "#,
-        Uuid::new_v4(),
+        device_id,
         user_id,
         refresh_token_hash,
         expires_at,
         user_agent,
-        device_id,
         device_name
     )
     .fetch_one(exec)
@@ -288,7 +267,7 @@ pub async fn get_session(
     let session = sqlx::query_as!(
         Session,
         r#"
-        SELECT id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        SELECT device_id, user_id, refresh_token_hash, user_agent, device_name, expires_at, revoked_at, created_at, last_used_at
         FROM session
         WHERE device_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
         "#,
@@ -300,14 +279,14 @@ pub async fn get_session(
     Ok(session)
 }
 
-pub async fn expire_session(pool: &Pool<Postgres>, session_id: Uuid) -> Result<(), ServerError> {
+pub async fn expire_session(pool: &Pool<Postgres>, device_id: Uuid) -> Result<(), ServerError> {
     sqlx::query!(
         r#"
         UPDATE session
         SET revoked_at = NOW()
-        WHERE id = $1
+        WHERE device_id = $1
         "#,
-        session_id
+        device_id
     )
     .execute(pool)
     .await?;
@@ -337,7 +316,7 @@ pub async fn list_session_dtos(
 
 pub async fn update_session(
     pool: &Pool<Postgres>,
-    session_id: Uuid,
+    device_id: Uuid,
     new_token_hash: &str,
     expires_at: DateTime<Utc>,
 ) -> Result<(), ServerError> {
@@ -345,11 +324,11 @@ pub async fn update_session(
         r#"
         UPDATE session
         SET refresh_token_hash = $1, expires_at = $2, last_used_at = NOW()
-        WHERE id = $3
+        WHERE device_id = $3
         "#,
         new_token_hash,
         expires_at,
-        session_id
+        device_id
     )
     .execute(pool)
     .await?;

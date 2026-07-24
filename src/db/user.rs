@@ -1,9 +1,10 @@
-use sqlx::{Executor, Pool, Postgres, query_as};
+use sqlx::{Executor, Pool, Postgres};
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::db;
 use crate::error::ServerError;
+use crate::models::auth::ProviderType;
 use crate::models::user::{PatchUserRequest, User};
 
 pub async fn get_user(pool: &Pool<Postgres>, id: Uuid) -> Result<Option<User>, ServerError> {
@@ -72,41 +73,35 @@ where
 pub async fn patch_user(
     pool: &Pool<Postgres>,
     user_id: Uuid,
-    user: &PatchUserRequest,
+    req: &PatchUserRequest,
 ) -> Result<User, ServerError> {
-    let mut updates = Vec::new();
-
-    if let Some(given_name) = &user.given_name {
-        updates.push(format!("given_name = '{given_name}'"));
-    }
-
-    if let Some(family_name) = &user.family_name {
-        updates.push(format!("family_name = '{family_name}'"));
-    }
-
-    if let Some(avatar_url) = &user.avatar_url {
-        updates.push(format!("avatar_url= '{avatar_url}'"));
-    }
-
-    if updates.is_empty() {
-        warn!("User tried patching non updated fields");
-        let user = db::user::get_user(pool, user_id)
+    if req.given_name.is_none() && req.family_name.is_none() && req.avatar_url.is_none() {
+        warn!("User tried patching with no updated fields");
+        return db::user::get_user(pool, user_id)
             .await?
-            .ok_or(ServerError::NotFound)?;
-
-        return Ok(user);
+            .ok_or(ServerError::NotFound);
     }
 
-    let set_statement = updates.join(" AND ");
-    let query = format!(
+    let user = sqlx::query_as!(
+        User,
         r#"
         UPDATE "user"
-        SET {set_statement}
-        WHERE user_id = ${user_id}
-        "#
-    );
-
-    let user = query_as::<_, User>(&query).fetch_one(pool).await?;
+        SET
+            given_name = COALESCE($2, given_name),
+            family_name = COALESCE($3, family_name),
+            avatar_url = COALESCE($4, avatar_url),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, phone_number, phone_number_verified, email, email_verified, given_name, family_name, avatar_url, created_at, updated_at, last_active_at
+        "#,
+        user_id,
+        req.given_name.as_deref(),
+        req.family_name.as_deref(),
+        req.avatar_url.as_deref()
+    )
+    .fetch_optional(pool)
+    .await?
+    .ok_or(ServerError::NotFound)?;
 
     Ok(user)
 }
@@ -125,21 +120,39 @@ pub async fn delete_user(pool: &Pool<Postgres>, id: Uuid) -> Result<bool, Server
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn is_phone_in_use(
+pub async fn is_identifier_in_use(
     pool: &Pool<Postgres>,
-    phone_number: &str,
+    provider_type: ProviderType,
+    identifier: &str,
 ) -> Result<bool, ServerError> {
-    let exists = sqlx::query_scalar!(
-        r#"
-        SELECT EXISTS(
-            SELECT 1 FROM "user"
-            WHERE phone_number = $1 AND phone_number_verified = TRUE
-        ) as "exists!"
-        "#,
-        phone_number
-    )
-    .fetch_one(pool)
-    .await?;
+    let exists = match provider_type {
+        ProviderType::Email => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT EXISTS(
+                    SELECT 1 FROM "user"
+                    WHERE email = $1 AND email_verified = TRUE
+                ) as "exists!"
+                "#,
+                identifier
+            )
+            .fetch_one(pool)
+            .await?
+        }
+        ProviderType::Phone => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT EXISTS(
+                    SELECT 1 FROM "user"
+                    WHERE phone_number = $1 AND phone_number_verified = TRUE
+                ) as "exists!"
+                "#,
+                identifier
+            )
+            .fetch_one(pool)
+            .await?
+        }
+    };
 
     Ok(exists)
 }

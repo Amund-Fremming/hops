@@ -92,6 +92,9 @@ impl IntoResponse for ServerError {
                         "Max attempts exceeded".to_string(),
                     ),
                     OtpError::WrongCode => (StatusCode::UNAUTHORIZED, "Wrong code".to_string()),
+                    OtpError::AlreadyVerified => {
+                        (StatusCode::CONFLICT, "OTP already verified".to_string())
+                    }
                     OtpError::NotFound => (StatusCode::NOT_FOUND, "OTP not found".to_string()),
                     OtpError::MaxMessagesExceeded => (
                         StatusCode::TOO_MANY_REQUESTS,

@@ -3,6 +3,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
+use validator::{Validate, ValidationError};
 
 use crate::models::auth::ProviderType;
 
@@ -13,6 +14,9 @@ pub enum OtpError {
 
     #[error("OTP expired")]
     Expired,
+
+    #[error("OTP already verified")]
+    AlreadyVerified,
 
     #[error("Max attempts exceeded")]
     MaxAttemptsExceeded,
@@ -35,16 +39,31 @@ pub struct OtpResponse {
     pub otp_id: Uuid,
 }
 
-// TODO - add verification
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateOtpRequest {
+    #[validate(custom(function = "validate_phone"))]
     pub phone_number: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct VerifyOtpRequest {
     pub otp_id: Uuid,
+    #[validate(custom(function = "validate_otp_code"))]
     pub code: String,
+}
+
+fn validate_phone(phone: &str) -> Result<(), ValidationError> {
+    if !crate::PHONE_REGEX.is_match(phone) {
+        return Err(ValidationError::new("invalid_phone"));
+    }
+    Ok(())
+}
+
+fn validate_otp_code(code: &str) -> Result<(), ValidationError> {
+    if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ValidationError::new("invalid_otp_code"));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]

@@ -11,11 +11,15 @@ use sqlx::postgres::PgPoolOptions;
 use tracing::info;
 
 const PHONE_NUMBER: &str = "+4741387142";
+const EMAIL: &str = "hops@resend.dev";
 
 /// Demonstrates the OTP verification flow using OtpService
 async fn phone_otp_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Create and send OTP (sends real SMS in production)
-    let otp_response = state.otp.create_and_send(PHONE_NUMBER).await?;
+    let otp_response = state
+        .otp
+        .create_and_send(PHONE_NUMBER, ProviderType::Phone)
+        .await?;
     info!(otp_id = %otp_response.otp_id, "OTP created and sent");
 
     // 2. In real flow, user enters code received via SMS
@@ -40,7 +44,10 @@ async fn phone_otp_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::
 /// verification will fail without the actual code.
 async fn phone_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Create and send OTP via OtpService
-    let otp_response = state.otp.create_and_send(PHONE_NUMBER).await?;
+    let otp_response = state
+        .otp
+        .create_and_send(PHONE_NUMBER, ProviderType::Phone)
+        .await?;
     info!(otp_id = %otp_response.otp_id, "OTP created for signup");
 
     // 2. In production: user receives SMS and enters code
@@ -72,6 +79,44 @@ async fn phone_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::erro
         access_token_len = tokens.access_token.len(),
         refresh_token_len = tokens.refresh_token.len(),
         "Phone signup flow completed"
+    );
+
+    Ok(())
+}
+
+/// Demonstrates full email signup flow using OtpService
+async fn email_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Create and send OTP via OtpService (sends real email)
+    let otp_response = state
+        .otp
+        .create_and_send(EMAIL, ProviderType::Email)
+        .await?;
+    info!(otp_id = %otp_response.otp_id, "OTP created for email signup");
+
+    // 2. In production: user receives email and enters code
+    info!("Skipping OTP verification (would need real code from email)");
+
+    // 3. For demo purposes, manually mark as verified using db directly
+    hops::db::otp::mark_verified(state.get_pool(), otp_response.otp_id).await?;
+
+    // 4. Complete signup via auth service
+    let tokens = state
+        .auth
+        .signup(
+            otp_response.otp_id,
+            ProviderType::Email,
+            "Test Device",
+            Some("example-user-agent"),
+            "Test",
+            "User",
+            "SecurePassword123!",
+        )
+        .await?;
+
+    info!(
+        access_token_len = tokens.access_token.len(),
+        refresh_token_len = tokens.refresh_token.len(),
+        "Email signup flow completed"
     );
 
     Ok(())
@@ -128,6 +173,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match phone_signup_flow(state.clone()).await {
         Ok(()) => info!("✅ Phone signup flow successful"),
         Err(e) => info!("❌ Phone signup flow failed: {}", e),
+    }
+
+    info!("--- Email Signup Flow ---");
+    match email_signup_flow(state.clone()).await {
+        Ok(()) => info!("✅ Email signup flow successful"),
+        Err(e) => info!("❌ Email signup flow failed: {}", e),
     }
 
     Ok(())

@@ -41,11 +41,10 @@ CREATE TABLE "user_credential" (
 );
 
 CREATE TABLE "session" (
-    "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "device_id" UUID PRIMARY KEY,
     "user_id" UUID NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
     "refresh_token_hash" VARCHAR(64) NOT NULL UNIQUE,
     "user_agent" TEXT,
-    "device_id" UUID NOT NULL UNIQUE,
     "device_name" VARCHAR(50) NOT NULL,
     "expires_at" TIMESTAMPTZ NOT NULL,
     "revoked_at" TIMESTAMPTZ,

@@ -2,6 +2,15 @@
 
 ### TODO
 
+- [ ]
+- [ ] logout functionality to revoke sessions
+- [ ] Sms rate limiting/sms fraud bumping limiting. Try calling elks and ask for fraud detection
+- [ ] Rate limiting with tower govenor
+- [ ] Add soft-lock with captcha/proof-of-work for sub max limit attempts
+      combine them; reset the counter when the lock window expires.
+- [ ] A single `crypto.secret` keys both OTP and refresh-token HMACs
+      ([main.rs:31](src/main.rs#L31)); consider domain separation.
+- [ ] add a ValidatedJson struct so i dont need to call validate on structs
 - [ ] change email/phone fucntionality
 - [ ] expand the refresh tokens to have session as parent
 - [ ] fix all todos
@@ -16,9 +25,7 @@
 
 ### Decisions Needed
 
-- [ ] remove device id from session and just use session id as device identifier (downsite is that now the client controls our device id creation)
 - [ ] Add runtime var for dryrun SMS in local env
-- [ ] Passwordless login requires given_name/family_name to be optional
 - [ ] Drop email from user, make phone_number non-optional
 - [ ] probably move to another architecture like feature folder (even tough it will break fast because of importing eachother)
 - [ ] limit check on how many devices, the phone login takes in device id, can end up with many sessions if the client is stupid

@@ -6,6 +6,8 @@ use rsa::{RsaPublicKey, pkcs8::DecodePublicKey, traits::PublicKeyParts};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::error::ServerError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
     pub access_token: String,
@@ -24,8 +26,8 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn user_id(&self) -> Uuid {
-        self.sub.parse::<Uuid>().expect("Invalid user_id in token")
+    pub fn user_id(&self) -> Result<Uuid, ServerError> {
+        self.sub.parse::<Uuid>().map_err(|_| ServerError::Forbidden)
     }
 }
 
@@ -56,7 +58,7 @@ impl Jwk {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Jwks {
-    pub keys: [Jwk; 2],
+    pub keys: [Jwk; 1],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,11 +130,10 @@ pub struct UserCredential {
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Session {
-    pub id: Uuid,
+    pub device_id: Uuid,
     pub user_id: Uuid,
     pub refresh_token_hash: String,
     pub user_agent: Option<String>,
-    pub device_id: Uuid,
     pub device_name: String,
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,

@@ -142,7 +142,40 @@ impl AppConfig {
             .add_source(Environment::with_prefix("APP").separator("__"))
             .build()?;
 
-        config.try_deserialize()
+        let app_config: Self = config.try_deserialize()?;
+
+        if env == "production" {
+            app_config.validate_production_secrets();
+        }
+
+        Ok(app_config)
+    }
+
+    fn validate_production_secrets(&self) {
+        let mut errors = Vec::new();
+
+        if self.crypto.secret.is_empty() {
+            errors.push("crypto.secret is empty");
+        }
+        if self.crypto.secret == "dev-secret-change-in-production" {
+            errors.push("crypto.secret is using development default");
+        }
+        if self.auth.private_key_pem().is_empty() {
+            errors.push("auth.private_key_base64 is empty");
+        }
+        if self.auth.public_key_pem().is_empty() {
+            errors.push("auth.public_key_base64 is empty");
+        }
+        if self.database.url.is_empty() {
+            errors.push("database.url is empty");
+        }
+
+        if !errors.is_empty() {
+            panic!(
+                "FATAL: Production configuration validation failed:\n  - {}",
+                errors.join("\n  - ")
+            );
+        }
     }
 }
 
