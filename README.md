@@ -1,5 +1,13 @@
 ## TODO
 
+Left off
+
+- change the otp to use identifier so it can store email stuff to
+- maybe make a service for otp
+- make the create otp take in provider type and match so i can send sms/email for code
+- then rename the phone signup to just signup
+- add social for google and apple
+
 ### TODO
 
 - [ ] expand the refresh tokens to have session as parent

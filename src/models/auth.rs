@@ -70,16 +70,16 @@ pub struct PasswordHistory {
 pub struct UserIdentity {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub provider_id: String,
+    pub identifier: String,
     pub provider_type: String,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ProviderType {
     Phone,
     Email,
-    Social,
 }
 
 impl ProviderType {
@@ -87,7 +87,6 @@ impl ProviderType {
         match self {
             Self::Phone => "phone",
             Self::Email => "email",
-            Self::Social => "social",
         }
     }
 }
@@ -99,7 +98,7 @@ impl fmt::Display for ProviderType {
 }
 
 #[derive(Debug, Clone)]
-pub struct LoginObject {
+pub struct LoginCredentials {
     pub user_id: Uuid,
     pub identity_id: Uuid,
     pub password_hash: String,
@@ -107,7 +106,7 @@ pub struct LoginObject {
     pub failed_attempts: i32,
 }
 
-impl LoginObject {
+impl LoginCredentials {
     pub fn is_locked(&self) -> bool {
         self.locked_until
             .map(|until| Utc::now() < until)

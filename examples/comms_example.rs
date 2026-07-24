@@ -5,7 +5,7 @@ const SMS_FROM: &str = "Hops";
 const SMS_TO: &str = "+4741387142";
 const SMS_MESSAGE: &str = "Hello!";
 
-const EMAIL_FROM: &str = "amund.fremming@gmail.com";
+const EMAIL_FROM: &str = "hops@resend.dev"; // TODO add your own domain
 const EMAIL_TO: &str = "amund.fremming@gmail.com";
 const EMAIL_SUBJECT: &str = "Hello from Hops!";
 const EMAIL_HTML: &str = "<p>Welcome to Hops!</p>";

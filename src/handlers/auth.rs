@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
     handlers::extract_user_agent,
     models::auth::{Claims, RefreshTokenRequest},
+    models::user::LoginRequest,
 };
 use axum::{
     Extension, Json, Router,
@@ -20,14 +21,14 @@ use crate::{
     error::{OtpError, ServerError},
     models::{
         otp::{CreateOtpRequest, Otp, VerifyOtpRequest},
-        user::{PhoneLoginRequest, PhoneSignupRequest},
+        user::PhoneSignupRequest,
     },
     state::AppState,
 };
 
 pub fn public_auth_routes(state: Arc<AppState>) -> Router {
     Router::new()
-        .route("/login/phone", post(phone_login))
+        .route("/login", post(login))
         .route("/signup/phone", post(phone_signup))
         .route("/refresh", post(refresh_tokens))
         .route("/otp", post(create_otp))
@@ -50,19 +51,20 @@ async fn list_sessions(
     Ok((StatusCode::OK, Json(sessions)))
 }
 
-async fn phone_login(
+async fn login(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Json(req): Json<PhoneLoginRequest>,
+    Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
     let user_agent = extract_user_agent(&headers);
     let token_response = state
         .auth
-        .phone_login(
+        .login(
             req.device_id,
             &req.device_name,
             user_agent,
-            &req.phone_number,
+            &req.identifier,
+            req.provider_type,
             &req.password,
         )
         .await?;

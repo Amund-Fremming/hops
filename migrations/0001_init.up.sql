@@ -19,9 +19,9 @@ CREATE TABLE "user_identity" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "user_id" UUID NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
     "provider_type" VARCHAR(50) NOT NULL,
-    "provider_id" VARCHAR(255) NOT NULL,
+    "identifier" VARCHAR(255) NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE ("provider_type", "provider_id")
+    UNIQUE ("provider_type", "identifier")
 );
 
 CREATE INDEX idx_user_identity_user_id ON "user_identity" ("user_id");

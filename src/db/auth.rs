@@ -4,14 +4,14 @@ use uuid::Uuid;
 
 use crate::error::ServerError;
 use crate::models::auth::{
-    LoginObject, ProviderType, Session, SessionDto, UserCredential, UserIdentity,
+    LoginCredentials, ProviderType, Session, SessionDto, UserCredential, UserIdentity,
 };
 
 pub async fn create_identity<'e, E>(
     exec: E,
     user_id: Uuid,
     provider_type: ProviderType,
-    provider_id: &str,
+    identifier: &str, // email or phone_number
 ) -> Result<UserIdentity, ServerError>
 where
     E: Executor<'e, Database = Postgres>,
@@ -19,14 +19,14 @@ where
     let identity = sqlx::query_as!(
         UserIdentity,
         r#"
-        INSERT INTO user_identity (id, user_id, provider_type, provider_id)
+        INSERT INTO user_identity (id, user_id, provider_type, identifier)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, user_id, provider_type, provider_id, created_at
+        RETURNING id, user_id, provider_type, identifier, created_at
         "#,
         Uuid::new_v4(),
         user_id,
         provider_type.as_str(),
-        provider_id
+        identifier
     )
     .fetch_one(exec)
     .await?;
@@ -101,24 +101,26 @@ pub async fn set_credential_password(
     Ok(())
 }
 
-pub async fn get_phone_login_object(
+pub async fn get_login_credentials(
     pool: &Pool<Postgres>,
-    phone_number: &str,
-) -> Result<Option<LoginObject>, ServerError> {
+    identifier: &str,
+    provider_type: ProviderType,
+) -> Result<Option<LoginCredentials>, ServerError> {
     let option = sqlx::query!(
         r#"
         SELECT ui.id as identity_id, ui.user_id, uc.password_hash, uc.failed_attempts, uc.locked_until
         FROM user_credential uc
         INNER JOIN user_identity ui ON ui.id = uc.identity_id
-        WHERE ui.provider_type = 'phone' AND ui.provider_id = $1
+        WHERE ui.provider_type = $1 AND ui.identifier = $2
         "#,
-        phone_number
+        provider_type.as_str(),
+        identifier,
     )
     .fetch_optional(pool)
     .await?;
 
     let Some(row) = option else { return Ok(None) };
-    let login_object = LoginObject {
+    let login_object = LoginCredentials {
         user_id: row.user_id,
         identity_id: row.identity_id,
         password_hash: row.password_hash,

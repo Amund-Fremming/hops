@@ -16,7 +16,7 @@ use crate::{
         self,
         audit::create_audit,
         auth::{
-            get_phone_login_object, increment_failed_attempts, lock_account, reset_failed_attempts,
+            get_login_credentials, increment_failed_attempts, lock_account, reset_failed_attempts,
         },
         otp::get_otp_by_id,
         user::is_phone_in_use,
@@ -218,24 +218,27 @@ impl AuthService {
         Utc::now() + Duration::from_hours(24 * CONFIG.auth.refresh_token_lifetime_days as u64)
     }
 
-    pub async fn phone_login(
+    pub async fn login(
         &self,
         device_id: Uuid,
         device_name: &str,
         user_agent: Option<&str>,
-        phone_number: &str,
+        identifier: &str, // email or phone_number
+        provider_type: ProviderType,
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
         let max_attempts = CONFIG.auth.max_failed_login_attempts;
         let lock_hours = CONFIG.auth.account_lock_hours;
 
-        let Some(login_object) = get_phone_login_object(&self.pool, phone_number).await? else {
-            warn!(phone_number = %phone_number, "Login failed: could not find user with credentials");
+        let Some(login_object) =
+            get_login_credentials(&self.pool, identifier, provider_type).await?
+        else {
+            warn!(phone_number = %identifier, "Login failed: could not find user with credentials");
             return Err(ServerError::NotFound);
         };
 
         if login_object.is_locked() {
-            warn!(phone_number = %phone_number, "Login failed: account locked");
+            warn!(phone_number = %identifier, "Login failed: account locked");
             return Err(ServerError::AccountLocked);
         }
 
@@ -245,13 +248,13 @@ impl AuthService {
 
         if !is_valid {
             self.audit_suspicious(login_object.user_id, "Login failed: wrong password");
-            warn!(phone_number = %phone_number, "Login failed: wrong password");
+            warn!(phone_number = %identifier, "Login failed: wrong password");
             increment_failed_attempts(&self.pool, login_object.identity_id).await?;
 
             if login_object.failed_attempts + 1 >= max_attempts {
                 lock_account(&self.pool, login_object.identity_id, lock_hours).await?;
                 self.audit_account_locked(login_object.user_id, lock_hours);
-                warn!(phone_number = %phone_number, "Account locked due to max failed attempts");
+                warn!(phone_number = %identifier, "Account locked due to max failed attempts");
             }
 
             return Err(ServerError::Auth("Login failed".to_string()));
@@ -260,7 +263,7 @@ impl AuthService {
         reset_failed_attempts(&self.pool, login_object.identity_id).await?;
 
         let user_id = login_object.user_id;
-        let phone_number = phone_number.to_string();
+        let phone_number = identifier.to_string();
         let pool = self.pool.clone();
 
         tokio::task::spawn(async move {

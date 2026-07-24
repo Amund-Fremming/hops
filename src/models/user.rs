@@ -3,12 +3,15 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
+use crate::models::auth::ProviderType;
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct PhoneLoginRequest {
+pub struct LoginRequest {
     #[serde(default)]
     pub device_id: Uuid,
     pub device_name: String,
-    pub phone_number: String,
+    pub provider_type: ProviderType,
+    pub identifier: String,
     pub password: String,
 }
 
