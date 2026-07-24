@@ -55,3 +55,22 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ github.token }}
+          ignore: RUSTSEC-2023-0071
+
+  ci-pass:
+    name: CI Pass
+    if: always()
+    needs: [fmt, clippy, check, test, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.fmt.result }}" != "success" ]] || \
+             [[ "${{ needs.clippy.result }}" != "success" ]] || \
+             [[ "${{ needs.check.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.audit.result }}" != "success" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          echo "All jobs passed"

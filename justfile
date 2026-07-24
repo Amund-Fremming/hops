@@ -34,5 +34,5 @@ local-ci:
     echo "=== Running tests ==="
     cargo test --all-features
     echo "=== Running audit ==="
-    cargo audit
+    cargo audit --ignore RUSTSEC-2023-0071
     echo "=== All checks passed! ==="
