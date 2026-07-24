@@ -2,9 +2,8 @@
 
 ### TODO
 
-- [ ]
-- [ ] logout functionality to revoke sessions
 - [ ] Sms rate limiting/sms fraud bumping limiting. Try calling elks and ask for fraud detection
+  - can try to limit exploit with combining user agent and ip address to blcok create requests, only issue is that 5g on mobiles can swap IP but might be ok here actually, because it wont block a user from creating more, just set a timeout on 30 seconds or so per number, and per user agent + ip or so?
 - [ ] Rate limiting with tower govenor
 - [ ] Add soft-lock with captcha/proof-of-work for sub max limit attempts
       combine them; reset the counter when the lock window expires.

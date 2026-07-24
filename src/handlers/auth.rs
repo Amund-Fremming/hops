@@ -4,7 +4,7 @@ use validator::Validate;
 
 use crate::{
     handlers::extract_user_agent,
-    models::auth::{Claims, RefreshTokenRequest},
+    models::auth::{Claims, LogoutRequest, RefreshTokenRequest},
     models::user::LoginRequest,
 };
 use axum::{
@@ -39,6 +39,7 @@ pub fn public_auth_routes(state: Arc<AppState>) -> Router {
 pub fn protected_auth_routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/sessions", get(list_sessions))
+        .route("/logout", post(logout))
         .with_state(state)
 }
 
@@ -49,6 +50,16 @@ async fn list_sessions(
     let user_id = claims.user_id()?;
     let sessions = db::auth::list_session_dtos(state.get_pool(), user_id).await?;
     Ok((StatusCode::OK, Json(sessions)))
+}
+
+async fn logout(
+    State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+    Json(req): Json<LogoutRequest>,
+) -> Result<impl IntoResponse, ServerError> {
+    let user_id = claims.user_id()?;
+    state.auth.logout(user_id, req.device_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn login(

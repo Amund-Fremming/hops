@@ -154,3 +154,8 @@ pub struct RefreshTokenRequest {
     pub device_id: Uuid,
     pub refresh_token: String,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LogoutRequest {
+    pub device_id: Uuid,
+}

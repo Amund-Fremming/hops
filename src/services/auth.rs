@@ -414,6 +414,27 @@ impl AuthService {
         Ok(self.token_response(at, rt))
     }
 
+    pub async fn logout(&self, user_id: Uuid, device_id: Uuid) -> Result<(), ServerError> {
+        let Some(session) = db::auth::get_session(&self.pool, device_id).await? else {
+            warn!(device_id = %device_id, "Logout attempted for non-existent session");
+            return Err(ServerError::NotFound);
+        };
+
+        if session.user_id != user_id {
+            self.audit_suspicious(
+                user_id,
+                "Logout attempted for session owned by another user",
+            );
+            warn!(user_id = %user_id, device_id = %device_id, "Logout attempted for session not owned by user");
+            return Err(ServerError::Forbidden);
+        }
+
+        db::auth::expire_session(&self.pool, device_id).await?;
+
+        info!(user_id = %user_id, device_id = %device_id, "User logged out");
+        Ok(())
+    }
+
     fn token_response(&self, access_token: String, refresh_token: String) -> TokenResponse {
         let access_expires_in_secs = self.config.access_token_lifetime_minutes * 60;
         let refresh_expires_in_secs = self.config.refresh_token_lifetime_days * 24 * 60 * 60;
@@ -498,6 +519,13 @@ mod test {
     - refresh_token fails when session is expired
     - refresh_token fails when session is revoked
     - refresh_token rejects a rotated (replayed) token and expires the session
+
+    ## logout
+    - logout succeeds and session becomes inactive
+    - logout fails when session not found
+    - logout fails when session owned by another user
+    - refresh_token fails after logout
+    - session shows as inactive in list after logout
 
     ## tokens
     - access token exp equals now + access_token_lifetime_minutes * 60
@@ -983,5 +1011,224 @@ tBkZIjFGA4t6duE5OAPX9muXdFFcLsTsgU/UFVgu2Tf83+jgsqsq2qV6JymAXZFi
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    fn create_integration_test_service(pool: Pool<Postgres>) -> AuthService {
+        let config = mock_auth_config();
+        let crypto = Arc::new(mock_crypto());
+
+        AuthService::new(
+            config,
+            pool,
+            crypto,
+            TEST_PRIVATE_KEY_PEM,
+            TEST_PUBLIC_KEY_PEM,
+            TEST_AUDIENCE,
+            TEST_ISSUER,
+        )
+        .unwrap()
+    }
+
+    #[sqlx::test]
+    async fn logout_succeeds_and_session_becomes_inactive(pool: sqlx::PgPool) {
+        let service = create_integration_test_service(pool.clone());
+        let user_id = Uuid::new_v4();
+        let device_id = Uuid::new_v4();
+
+        // Create user first
+        sqlx::query!(
+            r#"INSERT INTO "user" (id, given_name, family_name, created_at, updated_at) VALUES ($1, 'Test', 'User', NOW(), NOW())"#,
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create session
+        let rt_hash = "hashed_test_refresh_token";
+        let expires_at = Utc::now() + chrono::Duration::days(30);
+        db::auth::create_session(
+            &pool,
+            user_id,
+            device_id,
+            "Test Device",
+            rt_hash,
+            expires_at,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Logout
+        let result = service.logout(user_id, device_id).await;
+        assert!(result.is_ok());
+
+        // Verify session is inactive
+        let sessions = db::auth::list_session_dtos(&pool, user_id).await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert!(!sessions[0].active);
+    }
+
+    #[sqlx::test]
+    async fn logout_fails_when_session_not_found(pool: sqlx::PgPool) {
+        let service = create_integration_test_service(pool.clone());
+        let user_id = Uuid::new_v4();
+        let device_id = Uuid::new_v4();
+
+        let result = service.logout(user_id, device_id).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ServerError::NotFound));
+    }
+
+    #[sqlx::test]
+    async fn logout_fails_when_session_owned_by_another_user(pool: sqlx::PgPool) {
+        let service = create_integration_test_service(pool.clone());
+        let user_id = Uuid::new_v4();
+        let other_user_id = Uuid::new_v4();
+        let device_id = Uuid::new_v4();
+
+        // Create both users
+        sqlx::query!(
+            r#"INSERT INTO "user" (id, given_name, family_name, created_at, updated_at) VALUES ($1, 'Test', 'User', NOW(), NOW())"#,
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query!(
+            r#"INSERT INTO "user" (id, given_name, family_name, created_at, updated_at) VALUES ($1, 'Other', 'User', NOW(), NOW())"#,
+            other_user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create session for other_user
+        let rt_hash = "hashed_test_refresh_token";
+        let expires_at = Utc::now() + chrono::Duration::days(30);
+        db::auth::create_session(
+            &pool,
+            other_user_id,
+            device_id,
+            "Test Device",
+            rt_hash,
+            expires_at,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Try to logout as user_id (not the owner)
+        let result = service.logout(user_id, device_id).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ServerError::Forbidden));
+    }
+
+    #[sqlx::test]
+    async fn refresh_token_fails_after_logout(pool: sqlx::PgPool) {
+        let service = create_integration_test_service(pool.clone());
+        let user_id = Uuid::new_v4();
+        let device_id = Uuid::new_v4();
+        let refresh_token = "test_refresh_token";
+        let rt_hash = format!("hashed_{}", refresh_token);
+
+        // Create user
+        sqlx::query!(
+            r#"INSERT INTO "user" (id, given_name, family_name, created_at, updated_at) VALUES ($1, 'Test', 'User', NOW(), NOW())"#,
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create session
+        let expires_at = Utc::now() + chrono::Duration::days(30);
+        db::auth::create_session(
+            &pool,
+            user_id,
+            device_id,
+            "Test Device",
+            &rt_hash,
+            expires_at,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Logout
+        service.logout(user_id, device_id).await.unwrap();
+
+        // Try to refresh - should fail
+        let result = service.refresh_token(device_id, refresh_token).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ServerError::Forbidden));
+    }
+
+    #[sqlx::test]
+    async fn session_shows_as_inactive_in_list_after_logout(pool: sqlx::PgPool) {
+        let service = create_integration_test_service(pool.clone());
+        let user_id = Uuid::new_v4();
+        let device_id_1 = Uuid::new_v4();
+        let device_id_2 = Uuid::new_v4();
+
+        // Create user
+        sqlx::query!(
+            r#"INSERT INTO "user" (id, given_name, family_name, created_at, updated_at) VALUES ($1, 'Test', 'User', NOW(), NOW())"#,
+            user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create two sessions
+        let expires_at = Utc::now() + chrono::Duration::days(30);
+        db::auth::create_session(
+            &pool,
+            user_id,
+            device_id_1,
+            "Device 1",
+            "hash1",
+            expires_at,
+            None,
+        )
+        .await
+        .unwrap();
+        db::auth::create_session(
+            &pool,
+            user_id,
+            device_id_2,
+            "Device 2",
+            "hash2",
+            expires_at,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Verify both are active
+        let sessions = db::auth::list_session_dtos(&pool, user_id).await.unwrap();
+        assert_eq!(sessions.len(), 2);
+        assert!(sessions.iter().all(|s| s.active));
+
+        // Logout from device 1
+        service.logout(user_id, device_id_1).await.unwrap();
+
+        // Verify device 1 is inactive, device 2 is still active
+        let sessions = db::auth::list_session_dtos(&pool, user_id).await.unwrap();
+        assert_eq!(sessions.len(), 2);
+        let device_1_session = sessions
+            .iter()
+            .find(|s| s.device_id == device_id_1)
+            .unwrap();
+        let device_2_session = sessions
+            .iter()
+            .find(|s| s.device_id == device_id_2)
+            .unwrap();
+        assert!(!device_1_session.active);
+        assert!(device_2_session.active);
     }
 }

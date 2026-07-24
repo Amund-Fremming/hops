@@ -1,3 +1,0 @@
-# Status Quo
-
-## Security / Vulnerabilities
