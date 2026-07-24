@@ -5,6 +5,7 @@ use hops::adapters::crypto::CryptoAdapter;
 use hops::config::CONFIG;
 use hops::db;
 use hops::db::otp::{create_otp, get_otp_by_id, mark_verified};
+use hops::models::auth::ProviderType;
 use hops::models::otp::Otp;
 use hops::services::auth::AuthService;
 use hops::state::AppState;
@@ -12,12 +13,22 @@ use sqlx::postgres::PgPoolOptions;
 use tracing::info;
 
 const PHONE_NUMBER: &str = "+4741387142";
+const EMAIL: &str = "amund.fremming@gmail.com";
 const SEND_REAL_SMS: bool = false;
+const SEND_REAL_EMAIL: bool = false;
 
-async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+async fn phone_otp_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash, 5, 10).await?;
+    let otp_response = create_otp(
+        state.get_pool(),
+        PHONE_NUMBER,
+        ProviderType::Phone,
+        &hash,
+        5,
+        10,
+    )
+    .await?;
 
     if SEND_REAL_SMS {
         state
@@ -49,18 +60,21 @@ async fn otp_flow_successful_code(state: Arc<AppState>) -> Result<(), Box<dyn st
     Ok(())
 }
 
-async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+async fn email_otp_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let otp_response = create_otp(state.get_pool(), PHONE_NUMBER, &hash, 5, 10).await?;
+    let otp_response =
+        create_otp(state.get_pool(), EMAIL, ProviderType::Email, &hash, 5, 10).await?;
 
-    if SEND_REAL_SMS {
+    if SEND_REAL_EMAIL {
         state
             .comms
-            .send_sms(
-                "Hops",
-                PHONE_NUMBER,
-                &format!("Your login code is: {}", code),
+            .send_email(
+                "onboarding@resend.dev",
+                &[EMAIL],
+                "Your verification code",
+                Some(&format!("<p>Your code is: <strong>{}</strong></p>", code)),
+                None,
             )
             .await?;
     }
@@ -75,8 +89,8 @@ async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::e
         return Err("Max attempts exceeded".into());
     }
 
-    if !state.crypto.verify("000000", &otp.hash) {
-        return Err("Wrong code".into());
+    if !state.crypto.verify(&code, &otp.hash) {
+        return Err("Code verification failed".into());
     }
 
     mark_verified(state.get_pool(), otp_response.otp_id).await?;
@@ -84,13 +98,19 @@ async fn otp_flow_failed_code(state: Arc<AppState>) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-async fn complete_signup_flow_successful(
-    state: Arc<AppState>,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn phone_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Create OTP
     let code = Otp::generate_code();
     let hash = state.crypto.hash(&code);
-    let otp = db::otp::create_otp(state.get_pool(), PHONE_NUMBER, &hash, 5, 10).await?;
+    let otp = db::otp::create_otp(
+        state.get_pool(),
+        PHONE_NUMBER,
+        ProviderType::Phone,
+        &hash,
+        5,
+        10,
+    )
+    .await?;
 
     // 2. Verify OTP (simulating user entering correct code)
     let fetched_otp = db::otp::get_otp_by_id(state.get_pool(), otp.otp_id).await?;
@@ -105,8 +125,9 @@ async fn complete_signup_flow_successful(
     // 3. Complete signup via auth service
     let tokens = state
         .auth
-        .phone_signup(
+        .signup(
             otp.otp_id,
+            ProviderType::Phone,
             "Test Device",
             Some("example-user-agent"),
             "Test",
@@ -118,9 +139,47 @@ async fn complete_signup_flow_successful(
     info!(
         access_token_len = tokens.access_token.len(),
         refresh_token_len = tokens.refresh_token.len(),
-        access_expires_in = tokens.access_expires_in,
-        refresh_expires_in = tokens.refresh_expires_in,
-        "Full signup flow completed"
+        "Phone signup flow completed"
+    );
+
+    Ok(())
+}
+
+async fn email_signup_flow(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Create OTP
+    let code = Otp::generate_code();
+    let hash = state.crypto.hash(&code);
+    let otp =
+        db::otp::create_otp(state.get_pool(), EMAIL, ProviderType::Email, &hash, 5, 10).await?;
+
+    // 2. Verify OTP (simulating user entering correct code)
+    let fetched_otp = db::otp::get_otp_by_id(state.get_pool(), otp.otp_id).await?;
+    if fetched_otp.is_expired() {
+        return Err("OTP expired".into());
+    }
+    if !state.crypto.verify(&code, &fetched_otp.hash) {
+        return Err("Code verification failed".into());
+    }
+    db::otp::mark_verified(state.get_pool(), otp.otp_id).await?;
+
+    // 3. Complete signup via auth service
+    let tokens = state
+        .auth
+        .signup(
+            otp.otp_id,
+            ProviderType::Email,
+            "Test Device",
+            Some("example-user-agent"),
+            "Test",
+            "User",
+            "SecurePassword123!",
+        )
+        .await?;
+
+    info!(
+        access_token_len = tokens.access_token.len(),
+        refresh_token_len = tokens.refresh_token.len(),
+        "Email signup flow completed"
     );
 
     Ok(())
@@ -160,25 +219,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
     let state = create_state().await?;
 
-    match otp_flow_successful_code(state.clone()).await {
-        Ok(()) => info!("✅ OTP flow successful"),
-        Err(e) => info!("❌ OTP flow failed: {}", e),
+    info!("--- Phone OTP Flow ---");
+    match phone_otp_flow(state.clone()).await {
+        Ok(()) => info!("✅ Phone OTP flow successful"),
+        Err(e) => info!("❌ Phone OTP flow failed: {}", e),
     }
 
-    match otp_flow_failed_code(state.clone()).await {
-        Ok(()) => info!("❌ OTP flow was correct, should fail"),
-        Err(..) => info!("✅ OTP flow failed successfully"),
+    info!("--- Email OTP Flow ---");
+    match email_otp_flow(state.clone()).await {
+        Ok(()) => info!("✅ Email OTP flow successful"),
+        Err(e) => info!("❌ Email OTP flow failed: {}", e),
     }
 
-    match complete_signup_flow_successful(state.clone()).await {
-        Ok(()) => info!("✅ Singup flow successful"),
-        Err(e) => info!("❌ Signup flow failed: {}", e),
+    info!("--- Phone Signup Flow ---");
+    match phone_signup_flow(state.clone()).await {
+        Ok(()) => info!("✅ Phone signup flow successful"),
+        Err(e) => info!("❌ Phone signup flow failed: {}", e),
     }
 
-    // TODO
-    // - expired otp does not work
-    // - max attempts exceeded fails
-    // - max entries per day fails
+    info!("--- Email Signup Flow ---");
+    match email_signup_flow(state.clone()).await {
+        Ok(()) => info!("✅ Email signup flow successful"),
+        Err(e) => info!("❌ Email signup flow failed: {}", e),
+    }
 
     Ok(())
 }

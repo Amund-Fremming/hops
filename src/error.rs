@@ -34,6 +34,9 @@ pub enum ServerError {
     #[error("OTP error: {0}")]
     Otp(#[from] OtpError),
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("API error: {0} - {1}")]
     Api(StatusCode, String),
 }
@@ -103,6 +106,10 @@ impl IntoResponse for ServerError {
             Self::Api(sc, msg) => {
                 warn!("API error: {} - {}", sc, msg);
                 (sc, msg)
+            }
+            Self::Validation(msg) => {
+                warn!("Validation error: {}", msg);
+                (StatusCode::BAD_REQUEST, msg)
             }
         }
         .into_response()

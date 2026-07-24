@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use validator::Validate;
+
 use crate::{
     handlers::extract_user_agent,
     models::auth::{Claims, RefreshTokenRequest},
@@ -15,13 +17,15 @@ use axum::{
 use reqwest::StatusCode;
 use tracing::{error, info, warn};
 
+use crate::models::auth::ProviderType;
+
 use crate::{
     config::CONFIG,
     db,
     error::{OtpError, ServerError},
     models::{
         otp::{CreateOtpRequest, Otp, VerifyOtpRequest},
-        user::PhoneSignupRequest,
+        user::SignupRequest,
     },
     state::AppState,
 };
@@ -29,7 +33,7 @@ use crate::{
 pub fn public_auth_routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/login", post(login))
-        .route("/signup/phone", post(phone_signup))
+        .route("/signup", post(signup))
         .route("/refresh", post(refresh_tokens))
         .route("/otp", post(create_otp))
         .route("/otp/verify", post(verify_otp))
@@ -56,6 +60,9 @@ async fn login(
     headers: HeaderMap,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
+    req.validate()
+        .map_err(|e| ServerError::Validation(e.to_string()))?;
+
     let user_agent = extract_user_agent(&headers);
     let token_response = state
         .auth
@@ -72,19 +79,24 @@ async fn login(
     Ok((StatusCode::OK, Json(token_response)))
 }
 
-async fn phone_signup(
+async fn signup(
     State(state): State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
     headers: HeaderMap,
-    Json(req): Json<PhoneSignupRequest>,
+    Json(req): Json<SignupRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let otp = db::otp::get_otp_by_phone_number(state.get_pool(), &req.phone_number).await?;
+    req.validate()
+        .map_err(|e| ServerError::Validation(e.to_string()))?;
+
+    let otp = db::otp::get_otp_by_identifier(state.get_pool(), &req.identifier, req.provider_type)
+        .await?;
     let user_agent = extract_user_agent(&headers);
 
     let response = state
         .auth
-        .phone_signup(
+        .signup(
             otp.id,
+            req.provider_type,
             &req.device_name,
             user_agent,
             &req.given_name,
@@ -109,6 +121,7 @@ async fn create_otp(
     let response = db::otp::create_otp(
         state.get_pool(),
         &req.phone_number,
+        ProviderType::Phone,
         &hash,
         CONFIG.otp.ttl_minutes,
         CONFIG.otp.max_messages_per_day,
@@ -165,7 +178,7 @@ async fn verify_otp(
         warn!(
             otp_id = %otp_id,
             code = %req.code,
-            phone_number = %otp.phone_number,
+            phone_number = %otp.identifier,
             "Invalid code for OTP"
         );
 
@@ -174,7 +187,7 @@ async fn verify_otp(
                 error!(
                     otp_id = %otp_id,
                     code = %req.code,
-                    phone_number = %otp.phone_number,
+                    phone_number = %otp.identifier,
                     error = %e,
                     "Failed to increment failed OTP code"
                 );
@@ -188,7 +201,7 @@ async fn verify_otp(
         error!(
             otp_id = %req.otp_id,
             code = %req.code,
-            phone_number = %otp.phone_number,
+            phone_number = %otp.identifier,
             "Failed to mark OTP as verified, phone should be manually verified"
         );
         return Err(e.into());

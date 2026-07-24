@@ -158,9 +158,10 @@ impl AuthService {
 
     /// TODO:
     /// - optimize 5/6 database trips
-    pub async fn phone_signup(
+    pub async fn signup(
         &self,
         otp_id: Uuid,
+        provider_type: ProviderType,
         device_name: &str,
         user_agent: Option<&str>,
         given_name: &str,
@@ -173,24 +174,31 @@ impl AuthService {
             return Err(ServerError::Auth("Phone number not verified".to_string()));
         }
 
-        let phone_number = otp.phone_number;
+        let identifier = otp.identifier;
 
-        if is_phone_in_use(&self.pool, &phone_number).await? {
-            warn!(phone_number = %phone_number, "Signup attempted with phone number already in use");
+        if is_phone_in_use(&self.pool, &identifier).await? {
+            warn!(phone_number = %identifier, "Signup attempted with phone number already in use");
             return Err(ServerError::Conflict);
         }
 
         let mut user = User::new(given_name, family_name);
-        user.phone_number = Some(phone_number.clone());
-        user.phone_number_verified = true;
+        match provider_type {
+            ProviderType::Email => {
+                user.email = Some(identifier.clone());
+                user.email_verified = true;
+            }
+            ProviderType::Phone => {
+                user.phone_number = Some(identifier.clone());
+                user.phone_number_verified = true;
+            }
+        }
 
         let password_hash = self.crypto.hash_password(password)?;
 
         let mut tx = self.pool.begin().await?;
         db::user::create_user(&mut *tx, &user).await?;
         let identity =
-            db::auth::create_identity(&mut *tx, user.id, ProviderType::Phone, &phone_number)
-                .await?;
+            db::auth::create_identity(&mut *tx, user.id, ProviderType::Phone, &identifier).await?;
         db::auth::create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
 
@@ -417,9 +425,11 @@ mod test {
     - new succeeds with valid RSA keys
     - new fails with invalid private key PEM
     - new fails with invalid public key PEM
+    - new fails when Jwk construction fails
 
     ## get_jwks
     - get_jwks returns the JWKS with both keys
+    - get_jwks returns keys with distinct kids
 
     ## validate_token
     - validate_token succeeds with valid token and returns claims
@@ -427,31 +437,63 @@ mod test {
     - validate_token fails with invalid signature
     - validate_token fails with wrong audience
     - validate_token fails with wrong issuer
+    - validate_token rejects malformed tokens
+    - validate_token rejects alg=none and HS256-signed tokens (algorithm confusion)
+    - validate_token rejects tokens missing sub
 
-    ## phone_signup
-    - phone_signup succeeds and returns token response
-    - phone_signup fails when OTP not found
-    - phone_signup fails when OTP is not verified
-    - phone_signup fails when phone number already in use
+    ## signup
+    - signup succeeds with phone provider and returns token response
+    - signup succeeds with email provider and returns token response
+    - signup fails when OTP not found
+    - signup fails when OTP is not verified
+    - signup fails when identifier already in use (phone)
+    - signup fails when identifier already in use (email)
+    - signup sets phone_number and phone_number_verified for phone provider
+    - signup sets email and email_verified for email provider
+    - signup creates identity with the requested provider type (not always Phone)
+    - signup rolls back user row when credential creation fails
+    - signup rejects reuse of an already-consumed otp_id
+    - signup persists session with device_name/user_agent and a hash matching the returned RT
+    - signup succeeds with user_agent = None
 
-    ## phone_login
-    - phone_login succeeds and creates new session for new device
-    - phone_login succeeds and updates existing session for known device
-    - phone_login fails when phone number not found
-    - phone_login fails when account is locked
-    - phone_login fails when password is invalid
-    - phone_login locks account after max failed attempts reached
+    ## login
+    - login succeeds with phone provider and creates new session
+    - login succeeds with email provider and creates new session
+    - login succeeds and updates existing session for known device
+    - login fails when identifier not found (phone)
+    - login fails when identifier not found (email)
+    - login fails when account is locked
+    - login fails when password is invalid
+    - login locks account after max failed attempts reached
+    - login increments failed_attempts without locking below max
+    - login succeeds when locked_until has expired
+    - login resets failed_attempts after success following failures
+    - login propagates crypto verify_password errors
+    - login writes a success audit log
+    - login fails when identifier does not match provider_type
+    - login succeeds with user_agent = None
 
     ## set_password
     - set_password succeeds with valid old password
     - set_password fails when credential not found for provider
     - set_password fails when old password equals new password
     - set_password fails when old password is invalid
+    - set_password: new password verifies and old password is rejected afterwards
+    - set_password propagates crypto verify errors
 
     ## refresh_token
     - refresh_token succeeds and returns new token pair
     - refresh_token fails when session not found for device
     - refresh_token fails and expires session when token is invalid
     - refresh_token updates session with new token hash after rotation
+    - refresh_token fails when session is expired
+    - refresh_token fails when session is revoked
+    - refresh_token rejects a rotated (replayed) token and expires the session
+
+    ## tokens
+    - access token exp equals now + access_token_lifetime_minutes * 60
+    - refresh token expiry equals now + refresh_token_lifetime_days
+    - generate_refresh_token produces distinct 32-byte URL-safe values
+    - token_response lifetimes agree with the values used to mint the tokens
     */
 }

@@ -4,13 +4,16 @@ use chrono::Utc;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::models::otp::{Otp, OtpError, OtpResponse};
+use crate::models::{
+    auth::ProviderType,
+    otp::{Otp, OtpError, OtpResponse},
+};
 
 pub async fn get_otp_by_id(pool: &Pool<Postgres>, id: Uuid) -> Result<Otp, OtpError> {
     let otp = sqlx::query_as!(
         Otp,
         r#"
-        SELECT id, phone_number, hash, expires_at, verified_at, created_at, ip_address, failed_attempts
+        SELECT id, identifier, provider_type as "provider_type: ProviderType", hash, expires_at, verified_at, created_at, ip_address, failed_attempts
         FROM "otp"
         WHERE id = $1
         "#,
@@ -25,20 +28,22 @@ pub async fn get_otp_by_id(pool: &Pool<Postgres>, id: Uuid) -> Result<Otp, OtpEr
     }
 }
 
-pub async fn get_otp_by_phone_number(
+pub async fn get_otp_by_identifier(
     pool: &Pool<Postgres>,
-    phone_number: &str,
+    identifier: &str,
+    provider_type: ProviderType,
 ) -> Result<Otp, OtpError> {
     let otp = sqlx::query_as!(
         Otp,
         r#"
-        SELECT id, phone_number, hash, expires_at, verified_at, created_at, ip_address, failed_attempts
+        SELECT id, identifier, provider_type as "provider_type: ProviderType", hash, expires_at, verified_at, created_at, ip_address, failed_attempts
         FROM "otp"
-        WHERE phone_number = $1
+        WHERE identifier = $1 AND provider_type = $2
         ORDER BY created_at DESC
         LIMIT 1
         "#,
-        phone_number
+        identifier,
+        provider_type as ProviderType
     )
     .fetch_optional(pool)
     .await?;
@@ -97,15 +102,17 @@ pub async fn delete_expired_otps(pool: &Pool<Postgres>) -> Result<u64, sqlx::Err
 
 async fn get_otp_count_today(
     pool: &Pool<Postgres>,
-    phone_number: &str,
+    identifier: &str,
+    provider_type: ProviderType,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar!(
         r#"
         SELECT COUNT(*) as "count!"
         FROM "otp"
-        WHERE phone_number = $1 AND created_at >= CURRENT_DATE
+        WHERE identifier = $1 AND provider_type = $2 AND created_at >= CURRENT_DATE
         "#,
-        phone_number
+        identifier,
+        provider_type as ProviderType
     )
     .fetch_one(pool)
     .await
@@ -113,25 +120,27 @@ async fn get_otp_count_today(
 
 pub async fn create_otp(
     pool: &Pool<Postgres>,
-    phone_number: &str,
+    identifier: &str,
+    provider_type: ProviderType,
     hash: &str,
     ttl_minutes: u8,
     max_messages_per_day: i64,
 ) -> Result<OtpResponse, OtpError> {
     let expires_at = Utc::now() + Duration::from_mins(ttl_minutes as u64);
 
-    let otp_today = get_otp_count_today(pool, phone_number).await?;
+    let otp_today = get_otp_count_today(pool, identifier, provider_type).await?;
     if otp_today >= max_messages_per_day {
         return Err(OtpError::MaxMessagesExceeded);
     }
 
     let otp_id = sqlx::query_scalar!(
         r#"
-        INSERT INTO "otp" (phone_number, hash, expires_at)
-        VALUES ($1, $2, $3)
+        INSERT INTO "otp" (identifier, provider_type, hash, expires_at)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         "#,
-        phone_number,
+        identifier,
+        provider_type as ProviderType,
         hash,
         expires_at
     )

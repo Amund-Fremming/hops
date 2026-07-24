@@ -21,11 +21,11 @@ where
         r#"
         INSERT INTO user_identity (id, user_id, provider_type, identifier)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, user_id, provider_type, identifier, created_at
+        RETURNING id, user_id, provider_type as "provider_type: ProviderType", identifier, created_at
         "#,
         Uuid::new_v4(),
         user_id,
-        provider_type.as_str(),
+        provider_type as ProviderType,
         identifier
     )
     .fetch_one(exec)
@@ -48,7 +48,7 @@ pub async fn get_credential(
         WHERE ui.user_id = $1 AND ui.provider_type = $2 AND uc.locked_until IS NULL
         "#,
         user_id,
-        provider_type.as_str()
+        *provider_type as ProviderType
     )
     .fetch_optional(pool)
     .await?;
@@ -113,7 +113,7 @@ pub async fn get_login_credentials(
         INNER JOIN user_identity ui ON ui.id = uc.identity_id
         WHERE ui.provider_type = $1 AND ui.identifier = $2
         "#,
-        provider_type.as_str(),
+        provider_type as ProviderType,
         identifier,
     )
     .fetch_optional(pool)

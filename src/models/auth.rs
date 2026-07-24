@@ -71,11 +71,12 @@ pub struct UserIdentity {
     pub id: Uuid,
     pub user_id: Uuid,
     pub identifier: String,
-    pub provider_type: String,
+    pub provider_type: ProviderType,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "provider_type", rename_all = "lowercase")]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderType {
     Phone,

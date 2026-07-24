@@ -6,6 +6,8 @@ Left off
 - maybe make a service for otp
 - make the create otp take in provider type and match so i can send sms/email for code
 - then rename the phone signup to just signup
+- add tests, and verify that all go green
+- use fable tokens to scan the solution for security vulnerabilities
 - add social for google and apple
 
 ### TODO

@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::models::auth::ProviderType;
+
 #[derive(Debug, thiserror::Error)]
 pub enum OtpError {
     #[error("SMS failed to send")]
@@ -48,7 +50,8 @@ pub struct VerifyOtpRequest {
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Otp {
     pub id: Uuid,
-    pub phone_number: String,
+    pub identifier: String,
+    pub provider_type: ProviderType,
     pub hash: String,
     pub expires_at: DateTime<Utc>,
     pub verified_at: Option<DateTime<Utc>>,

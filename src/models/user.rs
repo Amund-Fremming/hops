@@ -1,11 +1,39 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidationError};
 
 use crate::models::auth::ProviderType;
 
-#[derive(Debug, Serialize, Deserialize)]
+pub fn validate_identifier(
+    provider_type: ProviderType,
+    identifier: &str,
+) -> Result<(), ValidationError> {
+    match provider_type {
+        ProviderType::Email => {
+            if !crate::EMAIL_REGEX.is_match(identifier) {
+                return Err(ValidationError::new("invalid_email"));
+            }
+        }
+        ProviderType::Phone => {
+            if !crate::PHONE_REGEX.is_match(identifier) {
+                return Err(ValidationError::new("invalid_phone"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_login(req: &LoginRequest) -> Result<(), ValidationError> {
+    validate_identifier(req.provider_type, &req.identifier)
+}
+
+fn validate_signup(req: &SignupRequest) -> Result<(), ValidationError> {
+    validate_identifier(req.provider_type, &req.identifier)
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+#[validate(schema(function = "validate_login"))]
 pub struct LoginRequest {
     #[serde(default)]
     pub device_id: Uuid,
@@ -16,9 +44,11 @@ pub struct LoginRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
-pub struct PhoneSignupRequest {
+#[validate(schema(function = "validate_signup"))]
+pub struct SignupRequest {
+    pub provider_type: ProviderType,
     pub device_name: String,
-    pub phone_number: String,
+    pub identifier: String,
     pub password: String,
     #[validate(regex(path = *crate::NAME_REGEX))]
     pub given_name: String,
@@ -66,13 +96,18 @@ impl User {
     }
 }
 
-impl From<PhoneSignupRequest> for User {
-    fn from(req: PhoneSignupRequest) -> Self {
+impl From<SignupRequest> for User {
+    fn from(req: SignupRequest) -> Self {
+        let (phone_number, email) = match req.provider_type {
+            ProviderType::Phone => (Some(req.identifier), None),
+            ProviderType::Email => (None, Some(req.identifier)),
+        };
+
         Self {
             id: Uuid::new_v4(),
-            phone_number: Some(req.phone_number),
+            phone_number,
             phone_number_verified: false,
-            email: None,
+            email,
             email_verified: false,
             given_name: req.given_name,
             family_name: req.family_name,
