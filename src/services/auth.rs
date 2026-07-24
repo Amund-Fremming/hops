@@ -47,6 +47,15 @@ pub struct AuthService {
     issuer: String,
 }
 
+impl std::fmt::Debug for AuthService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthService")
+            .field("audience", &self.audience)
+            .field("issuer", &self.issuer)
+            .finish_non_exhaustive()
+    }
+}
+
 impl AuthService {
     pub fn new(
         config: AuthConfig,
@@ -514,4 +523,376 @@ mod test {
     - generate_refresh_token produces distinct 32-byte URL-safe values
     - token_response lifetimes agree with the values used to mint the tokens
     */
+
+    use super::*;
+    use crate::config::AuthConfig;
+    use crate::ports::crypto::MockCryptoPort;
+
+    // Test RSA key pair (2048-bit PKCS#8 format, for testing only)
+    const TEST_PRIVATE_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDBextJ2j2PeWUH
+UAzvtMo8GWn3PUfnT/c31vAWy47MNQLE2HNoLjVc7Yn4CwS9Zp0Srx6zpAC6Oku8
+SCCjRpy/AozFItTp5w8jHS08st4tr3+pBZBh+frBVY+KVEDiCfumbnsSHhcBafZj
+KfOERDQL5t2nImSf66IUKUe5HslTRmEbnwTz9x92iTYl7vf3iKne4DRVcZ3oUn/Q
+HBIjjbjiwE9FPUN8k/TyWGiyMUXh0v5PrgdRSGICQtP2WDK5ycs5vQaqkshsAuUI
+Nfjvgtu0GRkiMUYDi3p24Tk4A9f2a5d0UVwuxOyBT9QVWC7ZN/zf6OCyqyrapXon
+KYBdkWL9AgMBAAECggEAChDPAyEU+c1deatq+N+Fc+n4jtHD119cI64NcIonhC0v
+1zDRlDZvNUXwWxSrqvTXMB0nMj5SgV2+Ce4QsJ3gUrmdvDXLMN4B9hgy/cjqcSMD
+t7Xf5JD+QCek35PxijDtxCNUSMWC+eJa3J7Wmed4c7QPjP3nkUBPftAE+LcGz0uv
+YYche2bKmcGxW9DjWT4zLphEY0bMVd2NljCHVF5ETm40FUcwGys7/SBODaXtOPXW
+ETjDpAWj1E7l2Ju1fyaPMzkeqNr/6wnjsK8Q1Eq4cFrJhLJjETLJUV7EAkp8DGp3
+BE19YLHKMcW+SppC6jx1U0Tu06na/HfoZecyqNqx0QKBgQDikf1bKttS2DVBbURj
+QWxkcFaDE73kyZorSobZObVHTyE3zY8jSzOX4FZTSNTbiSNSae2AmvKYdyLbcRjH
+l4S9f3L8pO4Im7bQm3MmU9BiYc4Suo7NZDscOmdPR8D3R2cttu8DJbhOSJ/AO4uE
+CPV0KXxvK2WYGz8vmM3PgNoGZQKBgQDanNCNefL9pRnem72G/6bh7EU3gQ8q3Ede
+kJyUQuNkkn6UQk/6jIDTYEyNxneRb7H1oDyTauRO+OGQamakZW2vecSMS5KYiqvB
+8HCRG5l9tU/z3DXN6WVHItQi/5Q0v39LKQ36HWwO/lB9iyUKSI3znZa/C7TzGBUF
+wWiGjFl0uQKBgDltLV1FMI//8wehTVsnAvU2MAdLIq9xldzxJ9q5MMRhPxcox+X3
+Mp2FI/w6EpGOYeCKrsMRAvo4ACLEuLYmJmPtgNSebSLLbPvU2svVJJU7GwNOO9G9
+XOobt4G1uygx9en1WwFeNyfIao1LymHt72DA/yQiSL7T8SD8RvYYP6qtAoGBANMX
+LMIPiTSmoY40MBQU892fOU7ZDf5C6Z9EYA1BcTUBx7v9NCEoXpS8ne8gPwBuLBaT
+fSqTwpUG+TdrpmUDk6AnIkSeDJXDAQqp0ugrEFE0LFm6vzFvNt4zoUeSJlewuYen
+wtlKY7culiZDn6aIXJlqB8+9zCIXlOUT1oxlJVPxAoGAPOIDeYWO4wRaZwUWQJox
+obuDcYZ6mpUtKeyobkLEv9ThUXqi7s/eH2V0seKVEfuJGv6/UYYJxMvmavdYfVhS
+BEJy/yLFZwRXC8HHx3+IZB//x5V/jHlFyf6bVVjdwzomrd535iFy6oQvMHIEu552
+3rR3vtBcz1EmXFIPCcOfDK4=
+-----END PRIVATE KEY-----"#;
+
+    const TEST_PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwXsbSdo9j3llB1AM77TK
+PBlp9z1H50/3N9bwFsuOzDUCxNhzaC41XO2J+AsEvWadEq8es6QAujpLvEggo0ac
+vwKMxSLU6ecPIx0tPLLeLa9/qQWQYfn6wVWPilRA4gn7pm57Eh4XAWn2YynzhEQ0
+C+bdpyJkn+uiFClHuR7JU0ZhG58E8/cfdok2Je7394ip3uA0VXGd6FJ/0BwSI424
+4sBPRT1DfJP08lhosjFF4dL+T64HUUhiAkLT9lgyucnLOb0GqpLIbALlCDX474Lb
+tBkZIjFGA4t6duE5OAPX9muXdFFcLsTsgU/UFVgu2Tf83+jgsqsq2qV6JymAXZFi
+/QIDAQAB
+-----END PUBLIC KEY-----"#;
+
+    const TEST_AUDIENCE: &str = "test-audience";
+    const TEST_ISSUER: &str = "test-issuer";
+
+    fn mock_auth_config() -> AuthConfig {
+        AuthConfig::new_for_test(
+            15, // access_token_lifetime_minutes
+            30, // refresh_token_lifetime_days
+            5,  // max_failed_login_attempts
+            24, // account_lock_hours
+            TEST_AUDIENCE.to_string(),
+            TEST_ISSUER.to_string(),
+        )
+    }
+
+    fn mock_crypto() -> MockCryptoPort {
+        let mut mock = MockCryptoPort::new();
+        mock.expect_hash().returning(|v| format!("hashed_{}", v));
+        mock.expect_verify()
+            .returning(|v, h| h == &format!("hashed_{}", v));
+        mock.expect_hash_password()
+            .returning(|p| Ok(format!("argon2_{}", p)));
+        mock.expect_verify_password()
+            .returning(|p, h| Ok(h == &format!("argon2_{}", p)));
+        mock
+    }
+
+    #[tokio::test]
+    async fn new_succeeds_with_valid_rsa_keys() {
+        let config = mock_auth_config();
+        let pool = create_test_pool();
+        let crypto = Arc::new(mock_crypto());
+
+        let result = AuthService::new(
+            config,
+            pool,
+            crypto,
+            TEST_PRIVATE_KEY_PEM,
+            TEST_PUBLIC_KEY_PEM,
+            TEST_AUDIENCE,
+            TEST_ISSUER,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn new_fails_with_invalid_private_key_pem() {
+        let config = mock_auth_config();
+        let pool = create_test_pool();
+        let crypto = Arc::new(mock_crypto());
+
+        let result = AuthService::new(
+            config,
+            pool,
+            crypto,
+            "not-a-valid-pem",
+            TEST_PUBLIC_KEY_PEM,
+            TEST_AUDIENCE,
+            TEST_ISSUER,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServerError::Auth(_)));
+    }
+
+    #[tokio::test]
+    async fn new_fails_with_invalid_public_key_pem() {
+        let config = mock_auth_config();
+        let pool = create_test_pool();
+        let crypto = Arc::new(mock_crypto());
+
+        let result = AuthService::new(
+            config,
+            pool,
+            crypto,
+            TEST_PRIVATE_KEY_PEM,
+            "not-a-valid-pem",
+            TEST_AUDIENCE,
+            TEST_ISSUER,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ServerError::Auth(_)));
+    }
+
+    #[tokio::test]
+    async fn get_jwks_returns_jwks_with_both_keys() {
+        let service = create_test_service();
+        let jwks = service.get_jwks();
+
+        assert_eq!(jwks.keys.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn get_jwks_returns_keys_with_distinct_kids() {
+        let service = create_test_service();
+        let jwks = service.get_jwks();
+
+        assert_ne!(jwks.keys[0].kid, jwks.keys[1].kid);
+        assert_eq!(jwks.keys[0].kid, "key-1");
+        assert_eq!(jwks.keys[1].kid, "key-2");
+    }
+
+    #[tokio::test]
+    async fn validate_token_succeeds_with_valid_token_and_returns_claims() {
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+        let token = service.generate_access_token(user_id).unwrap();
+
+        let result = service.validate_token(&token);
+
+        assert!(result.is_ok());
+        let claims = result.unwrap();
+        assert_eq!(claims.sub, user_id.to_string());
+        assert_eq!(claims.iss, TEST_ISSUER);
+        assert_eq!(claims.aud, vec![TEST_AUDIENCE]);
+    }
+
+    #[tokio::test]
+    async fn validate_token_fails_with_expired_token() {
+        let service = create_test_service();
+
+        // Manually create an expired token
+        let user_id = Uuid::new_v4();
+        let claims = Claims {
+            sub: user_id.to_string(),
+            iss: TEST_ISSUER.to_string(),
+            aud: vec![TEST_AUDIENCE.to_string()],
+            exp: (Utc::now().timestamp() - 3600) as usize, // 1 hour in the past
+            iat: (Utc::now().timestamp() - 7200) as usize,
+        };
+
+        let header = Header::new(Algorithm::RS256);
+        let encoding_key = EncodingKey::from_rsa_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).unwrap();
+        let expired_token = encode(&header, &claims, &encoding_key).unwrap();
+
+        let result = service.validate_token(&expired_token);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_token_fails_with_wrong_audience() {
+        // Create a service, then create a token with wrong audience
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+
+        let claims = Claims {
+            sub: user_id.to_string(),
+            iss: TEST_ISSUER.to_string(),
+            aud: vec!["wrong-audience".to_string()],
+            exp: (Utc::now().timestamp() + 3600) as usize,
+            iat: Utc::now().timestamp() as usize,
+        };
+
+        let header = Header::new(Algorithm::RS256);
+        let encoding_key = EncodingKey::from_rsa_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).unwrap();
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+
+        let result = service.validate_token(&token);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_token_fails_with_wrong_issuer() {
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+
+        let claims = Claims {
+            sub: user_id.to_string(),
+            iss: "wrong-issuer".to_string(),
+            aud: vec![TEST_AUDIENCE.to_string()],
+            exp: (Utc::now().timestamp() + 3600) as usize,
+            iat: Utc::now().timestamp() as usize,
+        };
+
+        let header = Header::new(Algorithm::RS256);
+        let encoding_key = EncodingKey::from_rsa_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).unwrap();
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+
+        let result = service.validate_token(&token);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_token_rejects_malformed_tokens() {
+        let service = create_test_service();
+
+        let result = service.validate_token("not.a.valid.jwt");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_token_rejects_empty_token() {
+        let service = create_test_service();
+
+        let result = service.validate_token("");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn generate_access_token_produces_valid_jwt() {
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+
+        let token = service.generate_access_token(user_id).unwrap();
+
+        // Token should have 3 parts separated by dots
+        let parts: Vec<&str> = token.split('.').collect();
+        assert_eq!(parts.len(), 3);
+
+        // Should be validatable
+        let result = service.validate_token(&token);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn generate_access_token_sets_correct_expiry() {
+        let service = create_test_service();
+        let user_id = Uuid::new_v4();
+        let before = Utc::now().timestamp();
+
+        let token = service.generate_access_token(user_id).unwrap();
+        let claims = service.validate_token(&token).unwrap();
+
+        let after = Utc::now().timestamp();
+        let expected_lifetime = 15 * 60; // 15 minutes in seconds
+
+        // exp should be approximately now + 15 minutes
+        assert!(claims.exp as i64 >= before + expected_lifetime);
+        assert!(claims.exp as i64 <= after + expected_lifetime + 1);
+    }
+
+    #[tokio::test]
+    async fn generate_refresh_token_produces_distinct_values() {
+        let service = create_test_service();
+
+        let rt1 = service.generate_refresh_token();
+        let rt2 = service.generate_refresh_token();
+
+        assert_ne!(rt1, rt2);
+    }
+
+    #[tokio::test]
+    async fn generate_refresh_token_is_url_safe() {
+        let service = create_test_service();
+
+        let rt = service.generate_refresh_token();
+
+        // URL-safe base64 should not contain +, /, or =
+        assert!(!rt.contains('+'));
+        assert!(!rt.contains('/'));
+        assert!(!rt.contains('='));
+    }
+
+    #[tokio::test]
+    async fn generate_refresh_token_has_sufficient_entropy() {
+        let service = create_test_service();
+
+        let rt = service.generate_refresh_token();
+
+        // 32 bytes encoded as URL-safe base64 without padding = 43 chars
+        assert_eq!(rt.len(), 43);
+    }
+
+    #[tokio::test]
+    async fn token_response_contains_correct_lifetimes() {
+        let service = create_test_service();
+        let at = "access_token".to_string();
+        let rt = "refresh_token".to_string();
+
+        let response = service.token_response(at.clone(), rt.clone());
+
+        assert_eq!(response.access_token, at);
+        assert_eq!(response.refresh_token, rt);
+        assert_eq!(response.access_expires_in, 15); // 15 minutes
+        assert_eq!(response.refresh_expires_in, 30 * 24 * 60); // 30 days in minutes
+    }
+
+    #[tokio::test]
+    async fn refresh_token_expiry_is_future_date() {
+        let now = Utc::now();
+        let expiry = AuthService::refresh_token_expiry();
+
+        assert!(expiry > now);
+    }
+
+    fn create_test_pool() -> Pool<Postgres> {
+        // connect_lazy is synchronous and creates a pool without connecting.
+        // Note: pool Drop still needs tokio, so tests using this should be #[tokio::test]
+        use sqlx::postgres::PgPoolOptions;
+        use std::time::Duration as StdDuration;
+
+        PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(StdDuration::from_millis(1))
+            .connect_lazy("postgres://test:test@localhost:5432/test")
+            .unwrap()
+    }
+
+    fn create_test_service() -> AuthService {
+        let config = mock_auth_config();
+        let pool = create_test_pool();
+        let crypto = Arc::new(mock_crypto());
+
+        AuthService::new(
+            config,
+            pool,
+            crypto,
+            TEST_PRIVATE_KEY_PEM,
+            TEST_PUBLIC_KEY_PEM,
+            TEST_AUDIENCE,
+            TEST_ISSUER,
+        )
+        .unwrap()
+    }
 }

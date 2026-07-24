@@ -37,5 +37,10 @@ name = "comms_example"
 path = "examples/comms_example.rs"
 
 [[example]]
-name = "phone_signup_example"
-path = "examples/phone_signup_example.rs"
+name = "signup_example"
+path = "examples/signup_example.rs"
+
+[dev-dependencies]
+mockall = "0.13"
+rstest = "0.25"
+futures = "0.3"

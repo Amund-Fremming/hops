@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"---EXIT:$?---\")",
+      "Bash(echo \"exit-status: $?\")",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"check-ignore exit: $?\")",
+      "Bash(echo \"=== exit: $? \\(1 means no matches\\) ===\")",
+      "Bash(grep -E \"\\\\.\\(env|toml\\)$|config/\")"
+    ]
+  }
+}

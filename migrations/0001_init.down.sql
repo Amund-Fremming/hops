@@ -9,3 +9,4 @@ DROP TABLE IF EXISTS "user_identity";
 DROP INDEX IF EXISTS idx_user_email;
 DROP INDEX IF EXISTS idx_user_phone_number;
 DROP TABLE IF EXISTS "user";
+DROP TYPE IF EXISTS "provider_type";

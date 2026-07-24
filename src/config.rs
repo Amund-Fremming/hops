@@ -68,6 +68,27 @@ impl AuthConfig {
     pub fn public_key_pem(&self) -> &str {
         &self.public_key_pem
     }
+
+    #[cfg(test)]
+    pub fn new_for_test(
+        access_token_lifetime_minutes: i64,
+        refresh_token_lifetime_days: i64,
+        max_failed_login_attempts: i32,
+        account_lock_hours: i64,
+        audience: String,
+        issuer: String,
+    ) -> Self {
+        Self {
+            private_key_pem: String::new(),
+            public_key_pem: String::new(),
+            access_token_lifetime_minutes,
+            refresh_token_lifetime_days,
+            max_failed_login_attempts,
+            account_lock_hours,
+            audience,
+            issuer,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

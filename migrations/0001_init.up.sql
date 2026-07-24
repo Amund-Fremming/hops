@@ -1,4 +1,6 @@
 -- Add migration script here
+CREATE TYPE provider_type AS ENUM ('phone', 'email');
+
 CREATE TABLE "user" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "phone_number" VARCHAR(20),
@@ -19,7 +21,7 @@ CREATE INDEX idx_user_email ON "user" ("email");
 CREATE TABLE "user_identity" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "user_id" UUID NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-    "provider_type" VARCHAR(50) NOT NULL,
+    "provider_type" provider_type NOT NULL,
     "identifier" VARCHAR(255) NOT NULL,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE ("provider_type", "identifier")
@@ -74,7 +76,7 @@ CREATE INDEX idx_audit_log_created_at ON "audit_log" ("created_at");
 CREATE TABLE "otp" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "identifier" VARCHAR(255) NOT NULL,
-    "provider_type" VARCHAR(50) NOT NULL,
+    "provider_type" provider_type NOT NULL,
     "hash" VARCHAR(128) NOT NULL,
     "expires_at" TIMESTAMPTZ NOT NULL,
     "verified_at" TIMESTAMPTZ DEFAULT NULL,
