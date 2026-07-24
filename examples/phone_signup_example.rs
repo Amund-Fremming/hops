@@ -147,6 +147,7 @@ async fn create_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
     let comms = Arc::new(CommsAdapter::new(
         CONFIG.comms.username.clone(),
         CONFIG.comms.password.clone(),
+        CONFIG.comms.resend_api_key.clone(),
     ));
 
     let state = AppState::new(pool, auth, comms, crypto);

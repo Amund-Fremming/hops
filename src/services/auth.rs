@@ -15,7 +15,9 @@ use crate::{
     db::{
         self,
         audit::create_audit,
-        auth::{get_phone_login_object, increment_failed_attempts, reset_failed_attempts},
+        auth::{
+            get_phone_login_object, increment_failed_attempts, lock_account, reset_failed_attempts,
+        },
         otp::get_otp_by_id,
         user::is_phone_in_use,
     },
@@ -132,10 +134,24 @@ impl AuthService {
                 .build();
 
             if let Err(e) = create_audit(&pool, &log).await {
-                error!(
-                    error = %e,
-                    "Failed to create suspicious audit log"
-                );
+                error!("Failed to create suspicious audit log: {}", e);
+            }
+        });
+    }
+
+    fn audit_account_locked(&self, user_id: Uuid, lock_hours: i64) {
+        let pool = self.pool.clone();
+
+        tokio::spawn(async move {
+            let log = AuditBuilder::new()
+                .resource_id(user_id)
+                .resource_type(ResourceType::User)
+                .action(Action::AccountLocked)
+                .metadata(json!({ "lock_hours": lock_hours }))
+                .build();
+
+            if let Err(e) = create_audit(&pool, &log).await {
+                error!("Failed to create account locked audit log: {}", e);
             }
         });
     }
@@ -211,14 +227,14 @@ impl AuthService {
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
         let max_attempts = CONFIG.auth.max_failed_login_attempts;
-        let Some(login_object) =
-            get_phone_login_object(&self.pool, phone_number, max_attempts).await?
-        else {
+        let lock_hours = CONFIG.auth.account_lock_hours;
+
+        let Some(login_object) = get_phone_login_object(&self.pool, phone_number).await? else {
             warn!(phone_number = %phone_number, "Login failed: could not find user with credentials");
             return Err(ServerError::NotFound);
         };
 
-        if login_object.is_locked {
+        if login_object.is_locked() {
             warn!(phone_number = %phone_number, "Login failed: account locked");
             return Err(ServerError::AccountLocked);
         }
@@ -231,6 +247,13 @@ impl AuthService {
             self.audit_suspicious(login_object.user_id, "Login failed: wrong password");
             warn!(phone_number = %phone_number, "Login failed: wrong password");
             increment_failed_attempts(&self.pool, login_object.identity_id).await?;
+
+            if login_object.failed_attempts + 1 >= max_attempts {
+                lock_account(&self.pool, login_object.identity_id, lock_hours).await?;
+                self.audit_account_locked(login_object.user_id, lock_hours);
+                warn!(phone_number = %phone_number, "Account locked due to max failed attempts");
+            }
+
             return Err(ServerError::Auth("Login failed".to_string()));
         }
 
@@ -387,21 +410,45 @@ impl AuthService {
 #[cfg(test)]
 mod test {
     /*
-    Add tests for
-    - phone login success create new session when device id not present
-    - phone login success updates session when device id not present
-    - phone login fails when password is invalid
-    - phone login fails when password is correct but the attempts have exceeded max
-    - phone login fails when the account is locked
+    ## new (constructor)
+    - new succeeds with valid RSA keys
+    - new fails with invalid private key PEM
+    - new fails with invalid public key PEM
 
-    - signup successfull
-    - signup fails when no otp present
-    - signup fails when otp not valid
-    - signup fails when otp is expired
-    - signup fails when phone number is in use
+    ## get_jwks
+    - get_jwks returns the JWKS with both keys
 
-    - set password
+    ## validate_token
+    - validate_token succeeds with valid token and returns claims
+    - validate_token fails with expired token
+    - validate_token fails with invalid signature
+    - validate_token fails with wrong audience
+    - validate_token fails with wrong issuer
 
-    - refresh token
+    ## phone_signup
+    - phone_signup succeeds and returns token response
+    - phone_signup fails when OTP not found
+    - phone_signup fails when OTP is not verified
+    - phone_signup fails when phone number already in use
+
+    ## phone_login
+    - phone_login succeeds and creates new session for new device
+    - phone_login succeeds and updates existing session for known device
+    - phone_login fails when phone number not found
+    - phone_login fails when account is locked
+    - phone_login fails when password is invalid
+    - phone_login locks account after max failed attempts reached
+
+    ## set_password
+    - set_password succeeds with valid old password
+    - set_password fails when credential not found for provider
+    - set_password fails when old password equals new password
+    - set_password fails when old password is invalid
+
+    ## refresh_token
+    - refresh_token succeeds and returns new token pair
+    - refresh_token fails when session not found for device
+    - refresh_token fails and expires session when token is invalid
+    - refresh_token updates session with new token hash after rotation
     */
 }

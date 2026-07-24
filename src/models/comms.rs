@@ -19,3 +19,19 @@ pub struct SendSmsResponse {
     pub message: String,
     pub id: String,
 }
+
+#[derive(Debug, Serialize)]
+pub struct SendEmailRequest {
+    pub from: String,
+    pub to: Vec<String>,
+    pub subject: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SendEmailResponse {
+    pub id: String,
+}

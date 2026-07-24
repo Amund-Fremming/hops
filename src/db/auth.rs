@@ -104,11 +104,10 @@ pub async fn set_credential_password(
 pub async fn get_phone_login_object(
     pool: &Pool<Postgres>,
     phone_number: &str,
-    max_failed_attempts: i32,
 ) -> Result<Option<LoginObject>, ServerError> {
     let option = sqlx::query!(
         r#"
-        SELECT ui.id as identity_id, ui.user_id, uc.password_hash, uc.failed_attempts
+        SELECT ui.id as identity_id, ui.user_id, uc.password_hash, uc.failed_attempts, uc.locked_until
         FROM user_credential uc
         INNER JOIN user_identity ui ON ui.id = uc.identity_id
         WHERE ui.provider_type = 'phone' AND ui.provider_id = $1
@@ -123,7 +122,8 @@ pub async fn get_phone_login_object(
         user_id: row.user_id,
         identity_id: row.identity_id,
         password_hash: row.password_hash,
-        is_locked: row.failed_attempts >= max_failed_attempts,
+        locked_until: row.locked_until,
+        failed_attempts: row.failed_attempts,
     };
 
     Ok(Some(login_object))
@@ -154,10 +154,30 @@ pub async fn reset_failed_attempts(
     sqlx::query!(
         r#"
         UPDATE user_credential
-        SET failed_attempts = 0, updated_at = NOW()
+        SET failed_attempts = 0, locked_until = NULL, updated_at = NOW()
         WHERE identity_id = $1
         "#,
         identity_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn lock_account(
+    pool: &Pool<Postgres>,
+    identity_id: Uuid,
+    lock_hours: i64,
+) -> Result<(), ServerError> {
+    sqlx::query!(
+        r#"
+        UPDATE user_credential
+        SET locked_until = NOW() + ($2 || ' hours')::interval, updated_at = NOW()
+        WHERE identity_id = $1
+        "#,
+        identity_id,
+        lock_hours.to_string()
     )
     .execute(pool)
     .await?;

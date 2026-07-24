@@ -43,6 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let comms = Arc::new(CommsAdapter::new(
         CONFIG.comms.username.clone(),
         CONFIG.comms.password.clone(),
+        CONFIG.comms.resend_api_key.clone(),
     ));
 
     let app_state = Arc::new(AppState::new(pool, auth, comms, crypto));

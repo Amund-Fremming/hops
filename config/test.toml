@@ -11,6 +11,7 @@ issuer = "hops-test"
 access_token_lifetime_minutes = 15
 refresh_token_lifetime_days = 30
 max_failed_login_attempts = 5
+account_lock_hours = 1
 
 [otp]
 ttl_minutes = 5
@@ -26,6 +27,7 @@ username = "test-username"
 password = "test-password"
 from = "Hops"
 otp_message_template = "Your verification code is {code}"
+resend_api_key = "test-resend-key"
 
 [audit]
 retention_days = 7

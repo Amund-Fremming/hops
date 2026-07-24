@@ -103,7 +103,16 @@ pub struct LoginObject {
     pub user_id: Uuid,
     pub identity_id: Uuid,
     pub password_hash: String,
-    pub is_locked: bool,
+    pub locked_until: Option<DateTime<Utc>>,
+    pub failed_attempts: i32,
+}
+
+impl LoginObject {
+    pub fn is_locked(&self) -> bool {
+        self.locked_until
+            .map(|until| Utc::now() < until)
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]

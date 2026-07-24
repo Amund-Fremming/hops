@@ -2,25 +2,51 @@ use hops::{adapters::comms::CommsAdapter, ports::comms::CommsPort};
 use tracing::{error, info};
 
 const SMS_FROM: &str = "Hops";
-const TO: &str = "+4741387142";
-const MESSAGE: &str = "Hello!";
+const SMS_TO: &str = "+4741387142";
+const SMS_MESSAGE: &str = "Hello!";
+
+const EMAIL_FROM: &str = "amund.fremming@gmail.com";
+const EMAIL_TO: &str = "amund.fremming@gmail.com";
+const EMAIL_SUBJECT: &str = "Hello from Hops!";
+const EMAIL_HTML: &str = "<p>Welcome to Hops!</p>";
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    let username = std::env::var("ELKS_USERNAME").expect("ELKS_USERNAME not set");
-    let password = std::env::var("ELKS_PASSWORD").expect("ELKS_PASSWORD not set");
+    let elks_username = std::env::var("ELKS_USERNAME").expect("ELKS_USERNAME not set");
+    let elks_password = std::env::var("ELKS_PASSWORD").expect("ELKS_PASSWORD not set");
+    let resend_api_key = std::env::var("RESEND_API_KEY").expect("RESEND_API_KEY not set");
 
-    let comms = CommsAdapter::new(username, password);
+    let comms = CommsAdapter::new(elks_username, elks_password, resend_api_key);
 
-    match comms.send_sms(SMS_FROM, TO, MESSAGE).await {
+    // SMS example
+    match comms.send_sms(SMS_FROM, SMS_TO, SMS_MESSAGE).await {
         Ok(response) => {
             info!(id = %response.id, status = %response.status, cost = %response.cost, "SMS sent successfully");
         }
         Err(e) => {
             error!(error = %e, "Failed to send SMS");
+        }
+    }
+
+    // Email example
+    match comms
+        .send_email(
+            EMAIL_FROM,
+            &[EMAIL_TO],
+            EMAIL_SUBJECT,
+            Some(EMAIL_HTML),
+            None,
+        )
+        .await
+    {
+        Ok(response) => {
+            info!(id = %response.id, "Email sent successfully");
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to send email");
         }
     }
 }

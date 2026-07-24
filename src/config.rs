@@ -32,6 +32,7 @@ pub struct CommsConfig {
     pub password: String,
     pub from: String,
     pub otp_message_template: String,
+    pub resend_api_key: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -51,6 +52,12 @@ pub struct AuthConfig {
     pub access_token_lifetime_minutes: i64,
     pub refresh_token_lifetime_days: i64,
     pub max_failed_login_attempts: i32,
+    #[serde(default = "default_account_lock_hours")]
+    pub account_lock_hours: i64,
+}
+
+fn default_account_lock_hours() -> i64 {
+    24
 }
 
 impl AuthConfig {
