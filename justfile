@@ -36,3 +36,6 @@ local-ci:
     echo "=== Running audit ==="
     cargo audit --ignore RUSTSEC-2023-0071
     echo "=== All checks passed! ==="
+
+prepare-sqlx:
+    cargo sqlx prepare -- --all-targets
