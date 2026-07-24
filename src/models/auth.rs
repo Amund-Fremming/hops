@@ -6,34 +6,12 @@ use rsa::{RsaPublicKey, pkcs8::DecodePublicKey, traits::PublicKeyParts};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{config::CONFIG, error::ServerError};
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
-    pub user_id: Uuid,
-    pub device_id: Uuid,
     pub access_token: String,
     pub refresh_token: String,
-    access_token_expiry: i64,
-    refresh_token_expiry: i64,
-}
-
-impl TokenResponse {
-    pub fn new(
-        user_id: Uuid,
-        device_id: Uuid,
-        access_token: String,
-        refresh_token: String,
-    ) -> Self {
-        Self {
-            user_id,
-            device_id,
-            access_token,
-            refresh_token,
-            access_token_expiry: CONFIG.auth.access_token_lifetime_minutes,
-            refresh_token_expiry: CONFIG.auth.refresh_token_lifetime_days,
-        }
-    }
+    pub access_expires_in: i64,
+    pub refresh_expires_in: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,10 +24,8 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn user_id(&self) -> Result<Uuid, ServerError> {
-        self.sub
-            .parse::<Uuid>()
-            .map_err(|e| ServerError::Auth(format!("Invalid user_id in token: {}", e)))
+    pub fn user_id(&self) -> Uuid {
+        self.sub.parse::<Uuid>().expect("Invalid user_id in token")
     }
 }
 
@@ -153,4 +129,18 @@ pub struct Session {
     pub revoked_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct SessionDto {
+    pub device_id: Uuid,
+    pub device_name: String,
+    pub user_agent: Option<String>,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RefreshTokenRequest {
+    pub device_id: Uuid,
+    pub refresh_token: String,
 }

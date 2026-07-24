@@ -3,7 +3,9 @@ use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
 use crate::error::ServerError;
-use crate::models::auth::{LoginObject, ProviderType, Session, UserCredential, UserIdentity};
+use crate::models::auth::{
+    LoginObject, ProviderType, Session, SessionDto, UserCredential, UserIdentity,
+};
 
 pub async fn create_identity<'e, E>(
     exec: E,
@@ -215,19 +217,57 @@ where
     Ok(session)
 }
 
+pub async fn upsert_session<'e, E>(
+    exec: E,
+    user_id: Uuid,
+    device_id: Uuid,
+    device_name: &str,
+    refresh_token_hash: &str,
+    expires_at: DateTime<Utc>,
+    user_agent: Option<&str>,
+) -> Result<Session, ServerError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let session = sqlx::query_as!(
+        Session,
+        r#"
+        INSERT INTO session (id, user_id, refresh_token_hash, expires_at, user_agent, device_id, device_name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (device_id) DO UPDATE SET
+            refresh_token_hash = EXCLUDED.refresh_token_hash,
+            expires_at = EXCLUDED.expires_at,
+            user_agent = EXCLUDED.user_agent,
+            device_name = EXCLUDED.device_name,
+            revoked_at = NULL,
+            last_used_at = NOW()
+        RETURNING id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
+        "#,
+        Uuid::new_v4(),
+        user_id,
+        refresh_token_hash,
+        expires_at,
+        user_agent,
+        device_id,
+        device_name
+    )
+    .fetch_one(exec)
+    .await?;
+
+    Ok(session)
+}
+
 pub async fn get_session(
     pool: &Pool<Postgres>,
     device_id: Uuid,
-    token_hash: &str,
 ) -> Result<Option<Session>, ServerError> {
     let session = sqlx::query_as!(
         Session,
         r#"
         SELECT id, user_id, refresh_token_hash, user_agent, device_id, device_name, expires_at, revoked_at, created_at, last_used_at
         FROM session
-        WHERE refresh_token_hash = $1 AND device_id = $2 AND revoked_at IS NULL AND expires_at > NOW()
+        WHERE device_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
         "#,
-        token_hash,
         device_id
     )
     .fetch_optional(pool)
@@ -249,6 +289,26 @@ pub async fn expire_session(pool: &Pool<Postgres>, session_id: Uuid) -> Result<(
     .await?;
 
     Ok(())
+}
+
+pub async fn list_session_dtos(
+    pool: &Pool<Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<SessionDto>, ServerError> {
+    let sessions = sqlx::query_as!(
+        SessionDto,
+        r#"
+        SELECT device_id, device_name, user_agent, (revoked_at IS NULL AND expires_at > NOW()) as "active!"
+        FROM session
+        WHERE user_id = $1
+        ORDER BY last_used_at DESC NULLS LAST
+        "#,
+        user_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(sessions)
 }
 
 pub async fn update_session(

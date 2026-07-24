@@ -31,6 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let crypto = Arc::new(CryptoAdapter::new(CONFIG.crypto.secret.clone()));
 
     let auth = Arc::new(AuthService::new(
+        CONFIG.auth.clone(),
         pool.clone(),
         crypto.clone(),
         CONFIG.auth.private_key_pem(),

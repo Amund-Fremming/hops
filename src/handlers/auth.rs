@@ -1,6 +1,16 @@
 use std::sync::Arc;
 
-use axum::{Json, Router, extract::State, http::HeaderMap, response::IntoResponse, routing::post};
+use crate::{
+    handlers::extract_user_agent,
+    models::auth::{Claims, RefreshTokenRequest},
+};
+use axum::{
+    Extension, Json, Router,
+    extract::State,
+    http::HeaderMap,
+    response::IntoResponse,
+    routing::{get, post},
+};
 use reqwest::StatusCode;
 use tracing::{error, info, warn};
 
@@ -15,7 +25,7 @@ use crate::{
     state::AppState,
 };
 
-pub fn auth_routes(state: Arc<AppState>) -> Router {
+pub fn public_auth_routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/login/phone", post(phone_login))
         .route("/signup/phone", post(phone_signup))
@@ -25,13 +35,36 @@ pub fn auth_routes(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+pub fn protected_auth_routes(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/sessions", get(list_sessions))
+        .with_state(state)
+}
+
+async fn list_sessions(
+    State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+) -> Result<impl IntoResponse, ServerError> {
+    let user_id = claims.user_id();
+    let sessions = db::auth::list_session_dtos(state.get_pool(), user_id).await?;
+    Ok((StatusCode::OK, Json(sessions)))
+}
+
 async fn phone_login(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(req): Json<PhoneLoginRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
+    let user_agent = extract_user_agent(&headers);
     let token_response = state
         .auth
-        .phone_login(&req.phone_number, &req.password)
+        .phone_login(
+            req.device_id,
+            &req.device_name,
+            user_agent,
+            &req.phone_number,
+            &req.password,
+        )
         .await?;
 
     Ok((StatusCode::OK, Json(token_response)))
@@ -39,22 +72,19 @@ async fn phone_login(
 
 async fn phone_signup(
     State(state): State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
     headers: HeaderMap,
     Json(req): Json<PhoneSignupRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    let user_agent = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-
     let otp = db::otp::get_otp_by_phone_number(state.get_pool(), &req.phone_number).await?;
+    let user_agent = extract_user_agent(&headers);
 
     let response = state
         .auth
         .phone_signup(
             otp.id,
             &req.device_name,
-            user_agent.as_deref(),
+            user_agent,
             &req.given_name,
             &req.family_name,
             &req.password,
@@ -62,7 +92,7 @@ async fn phone_signup(
         .await?;
 
     info!(
-        user_id = %response.user_id,
+        user_id = %claims.user_id(),
         "Phone signup successful"
     );
     Ok((StatusCode::CREATED, Json(response)))
@@ -166,7 +196,13 @@ async fn verify_otp(
 }
 
 async fn refresh_tokens(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RefreshTokenRequest>,
 ) -> Result<impl IntoResponse, ServerError> {
-    Ok(())
+    let response = state
+        .auth
+        .refresh_token(req.device_id, &req.refresh_token)
+        .await?;
+
+    Ok((StatusCode::OK, Json(response)))
 }

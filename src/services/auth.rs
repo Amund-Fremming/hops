@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use reqwest::StatusCode;
 use serde_json::json;
@@ -11,17 +11,17 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    config::CONFIG,
+    config::{AuthConfig, CONFIG},
     db::{
         self,
         audit::create_audit,
         auth::{get_phone_login_object, increment_failed_attempts, reset_failed_attempts},
-        user::{self, create_user, is_phone_in_use},
+        user::{create_user, is_phone_in_use},
     },
     error::ServerError,
     models::{
         audit::{AuditBuilder, ResourceType},
-        auth::{ProviderType, Session},
+        auth::ProviderType,
     },
 };
 use crate::{
@@ -37,6 +37,7 @@ use crate::{
 };
 
 pub struct AuthService {
+    config: AuthConfig,
     pool: Pool<Postgres>,
     crypto: Arc<dyn CryptoPort>,
     jwks: Jwks,
@@ -49,6 +50,7 @@ pub struct AuthService {
 
 impl AuthService {
     pub fn new(
+        config: AuthConfig,
         pool: Pool<Postgres>,
         crypto: Arc<dyn CryptoPort>,
         private_key_pem: &str,
@@ -71,6 +73,7 @@ impl AuthService {
         validation.set_issuer(&[issuer]);
 
         Ok(Self {
+            config,
             pool,
             crypto,
             jwks,
@@ -116,14 +119,12 @@ impl AuthService {
     }
 
     /// Refresh token + hash
-    fn generate_refresh_token(&self) -> (String, String) {
+    fn generate_refresh_token(&self) -> String {
         let refresh_token = {
             let bytes: [u8; 32] = rand::random();
             URL_SAFE_NO_PAD.encode(bytes)
         };
-
-        let hash = self.crypto.hash(&refresh_token);
-        (refresh_token, hash)
+        refresh_token
     }
 
     /// TODO:
@@ -163,14 +164,15 @@ impl AuthService {
             .crypto
             .hash_password(password)
             .map_err(|e| ServerError::Auth(e))?;
+
         create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
 
         let device_id = Uuid::new_v4();
         let at = self.generate_access_token(user.id)?;
-        let (rt, rt_hash) = self.generate_refresh_token();
-        let refresh_token_expiry =
-            Utc::now() + Duration::from_hours(24 * CONFIG.auth.refresh_token_lifetime_days as u64);
+        let rt = self.generate_refresh_token();
+        let rt_hash = self.crypto.hash(&rt);
+        let rt_expiry = Self::refresh_token_expiry();
 
         db::auth::create_session(
             &self.pool,
@@ -178,18 +180,23 @@ impl AuthService {
             device_id,
             device_name,
             &rt_hash,
-            refresh_token_expiry,
+            rt_expiry,
             user_agent,
         )
         .await?;
 
-        let response = TokenResponse::new(user.id, device_id, at, rt);
-        Ok(response)
+        Ok(self.token_response(at, rt))
+    }
+
+    fn refresh_token_expiry() -> DateTime<Utc> {
+        Utc::now() + Duration::from_hours(24 * CONFIG.auth.refresh_token_lifetime_days as u64)
     }
 
     pub async fn phone_login(
         &self,
         device_id: Uuid,
+        device_name: &str,
+        user_agent: Option<&str>,
         phone_number: &str,
         password: &str,
     ) -> Result<TokenResponse, ServerError> {
@@ -206,11 +213,13 @@ impl AuthService {
             return Err(ServerError::AccountLocked);
         }
 
-        if !self
+        let is_valid = self
             .crypto
             .verify_password(password, &login_object.password_hash)
-            .map_err(|e| ServerError::Auth(e))?
-        {
+            .map_err(|e| ServerError::Auth(e))?;
+
+        if !is_valid {
+            // TODO - audit log suspicious
             warn!(phone_number = %phone_number, "Login failed: wrong password");
             increment_failed_attempts(&self.pool, login_object.identity_id).await?;
             return Err(ServerError::Auth("Login failed".to_string()));
@@ -237,39 +246,22 @@ impl AuthService {
         });
 
         let at = self.generate_access_token(user_id)?;
-        let (rt, rt_hash) = self.generate_refresh_token();
+        let rt = self.generate_refresh_token();
+        let rt_hash = self.crypto.hash(&rt);
+        let rt_expiry = Self::refresh_token_expiry();
 
-        let device_id = match device_id {
-            Some(device_id) => {
-                device_id
-            }
-            None => {
-                let device_id = Uuid::new_v4();
-                db::auth::create_session(&self.pool, user_id, device_id, device_name, refresh_token_hash, expires_at, user_agent).await?;
-                device_id
-            }
-        };
+        db::auth::upsert_session(
+            &self.pool,
+            user_id,
+            device_id,
+            device_name,
+            &rt_hash,
+            rt_expiry,
+            user_agent,
+        )
+        .await?;
 
-        // TODO - upsert the old session with new token hash
-        db::auth::update_session(&self.pool, session_id, new_token_hash, expires_at)
-
-        /*
-           i cant just get the device id from the handler, because a user can login with a new device
-           do i
-           - try to get the session based on the provider id and provider type (phone number and 'phone' and also make this fn more generic for email logins and so on)
-           - 
-        */
-
-        let response = TokenResponse::new(user_id, device_id, at, rt);
-        Ok(response)
-    }
-
-    pub async fn get_identities(&self, user_id: Uuid) -> Result<Vec<String>, ServerError> {
-        /*
-            Get all users identities, and then if they are currently logged in with what devices
-            Create a pretty struct to retunr to user.
-        */
-        todo!()
+        Ok(self.token_response(at, rt))
     }
 
     pub async fn set_password(
@@ -282,6 +274,7 @@ impl AuthService {
         let Some(user_credential) =
             db::auth::get_credential(&self.pool, user_id, &provider_type).await?
         else {
+            // TODO - audit log suspicious
             warn!(
                 user_id = %user_id,
                 provider_type = %provider_type,
@@ -295,6 +288,7 @@ impl AuthService {
             .verify(old_password, &user_credential.password_hash);
 
         if !valid_old_password {
+            // TODO - audit log suspicious
             warn!(
                 user_id = %user_id,
                 provider_type = %provider_type,
@@ -321,8 +315,7 @@ impl AuthService {
         device_id: Uuid,
         refresh_token: &str,
     ) -> Result<TokenResponse, ServerError> {
-        let hash = self.crypto.hash(refresh_token);
-        let Some(session) = db::auth::get_session(&self.pool, device_id, &hash).await? else {
+        let Some(session) = db::auth::get_session(&self.pool, device_id).await? else {
             warn!(
                 device_id = %device_id,
                 "Requested refresh token does not exist"
@@ -330,11 +323,13 @@ impl AuthService {
             return Err(ServerError::Forbidden);
         };
 
+        let user_id = session.user_id;
         let valid_token = self
             .crypto
-            .verify(&session.refresh_token_hash, &session.refresh_token_hash);
+            .verify(&refresh_token, &session.refresh_token_hash);
 
         if !valid_token {
+            // TODO - audit log suspicious
             warn!(
                 session_id = %session.id,
                 device_id = %device_id,
@@ -344,6 +339,33 @@ impl AuthService {
             return Err(ServerError::Forbidden);
         }
 
-        Ok(())
+        let at = self.generate_access_token(user_id)?;
+        let rt = self.generate_refresh_token();
+        let rt_hash = self.crypto.hash(&rt);
+        let rt_expiry = Self::refresh_token_expiry();
+        let session_id = session.id;
+        let pool = self.pool.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = db::auth::update_session(&pool, session_id, &rt_hash, rt_expiry).await {
+                error!(
+                    user_id = %user_id,
+                    session_id = %session_id,
+                    error = %e,
+                    "Failed to update session with new refresh token"
+                );
+            };
+        });
+
+        Ok(self.token_response(at, rt))
+    }
+
+    fn token_response(&self, access_token: String, refresh_token: String) -> TokenResponse {
+        TokenResponse {
+            access_token,
+            refresh_token,
+            access_expires_in: self.config.access_token_lifetime_minutes,
+            refresh_expires_in: self.config.refresh_token_lifetime_days,
+        }
     }
 }

@@ -14,6 +14,7 @@
 
 ### Decisions Needed
 
+- [ ] remove device id from session and just use session id as device identifier (downsite is that now the client controls our device id creation)
 - [ ] Add runtime var for dryrun SMS in local env
 - [ ] Passwordless login requires given_name/family_name to be optional
 - [ ] Drop email from user, make phone_number non-optional

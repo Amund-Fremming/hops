@@ -1,22 +1,30 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router, extract::State, middleware as axum_mw, response::IntoResponse, routing::get,
+    Json, Router, extract::State, http::HeaderMap, middleware as axum_mw, response::IntoResponse,
+    routing::get,
 };
 use serde_json::json;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    state::AppState,
     handlers::{
-        audit::audit_routes, auth::auth_routes, middleware::auth_mw, user::user_routes,
+        audit::audit_routes,
+        auth::{protected_auth_routes, public_auth_routes},
+        middleware::auth_mw,
+        user::user_routes,
     },
+    state::AppState,
 };
 
 pub mod audit;
 pub mod auth;
 pub mod middleware;
 pub mod user;
+
+pub fn extract_user_agent(headers: &HeaderMap) -> Option<&str> {
+    headers.get("user-agent").and_then(|v| v.to_str().ok())
+}
 
 async fn health() -> impl IntoResponse {
     Json(json!({ "health": "OK" }))
@@ -31,11 +39,12 @@ pub fn app_routes(state: Arc<AppState>) -> Router {
         .route("/health", get(health))
         .route("/.well-known/jwks.json", get(well_known_jwks))
         .with_state(state.clone())
-        .nest("/auth", auth_routes(state.clone()));
+        .nest("/auth", public_auth_routes(state.clone()));
 
     let protected_routes: Router = Router::new()
         .nest("/user", user_routes(state.clone()))
         .nest("/audit", audit_routes(state.clone()))
+        .nest("/auth", protected_auth_routes(state.clone()))
         .layer(axum_mw::from_fn_with_state(state, auth_mw));
 
     Router::new()

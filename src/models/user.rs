@@ -5,6 +5,9 @@ use validator::Validate;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PhoneLoginRequest {
+    #[serde(default)]
+    pub device_id: Uuid,
+    pub device_name: String,
     pub phone_number: String,
     pub password: String,
 }
