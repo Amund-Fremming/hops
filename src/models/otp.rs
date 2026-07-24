@@ -43,6 +43,7 @@ pub struct OtpResponse {
 pub struct CreateOtpRequest {
     #[validate(custom(function = "validate_phone"))]
     pub phone_number: String,
+    pub provider_type: ProviderType,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
