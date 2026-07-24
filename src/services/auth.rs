@@ -15,12 +15,9 @@ use crate::{
     db::{
         self,
         audit::create_audit,
-        auth::{
-            create_credential, create_identity, get_phone_login_object, increment_failed_attempts,
-            reset_failed_attempts,
-        },
+        auth::{get_phone_login_object, increment_failed_attempts, reset_failed_attempts},
         otp::get_otp_by_id,
-        user::{create_user, is_phone_in_use},
+        user::is_phone_in_use,
     },
     error::ServerError,
     models::{
@@ -171,14 +168,14 @@ impl AuthService {
         user.phone_number = Some(phone_number.clone());
         user.phone_number_verified = true;
 
-        let mut tx = self.pool.begin().await?;
-        create_user(&mut *tx, &user).await?;
-        let identity =
-            create_identity(&mut *tx, user.id, ProviderType::Phone, &phone_number).await?;
-
         let password_hash = self.crypto.hash_password(password)?;
 
-        create_credential(&mut *tx, identity.id, &password_hash).await?;
+        let mut tx = self.pool.begin().await?;
+        db::user::create_user(&mut *tx, &user).await?;
+        let identity =
+            db::auth::create_identity(&mut *tx, user.id, ProviderType::Phone, &phone_number)
+                .await?;
+        db::auth::create_credential(&mut *tx, identity.id, &password_hash).await?;
         tx.commit().await?;
 
         let device_id = Uuid::new_v4();
@@ -391,6 +388,20 @@ impl AuthService {
 mod test {
     /*
     Add tests for
-    -
+    - phone login success create new session when device id not present
+    - phone login success updates session when device id not present
+    - phone login fails when password is invalid
+    - phone login fails when password is correct but the attempts have exceeded max
+    - phone login fails when the account is locked
+
+    - signup successfull
+    - signup fails when no otp present
+    - signup fails when otp not valid
+    - signup fails when otp is expired
+    - signup fails when phone number is in use
+
+    - set password
+
+    - refresh token
     */
 }
