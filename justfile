@@ -18,3 +18,18 @@ generate-keys:
     echo ""
     echo "APP__AUTH__PUBLIC_KEY_BASE64=$(cat /tmp/public.pem | base64 | tr -d '\n')"
     rm /tmp/private.pem /tmp/public.pem
+
+local-ci:
+    #!/bin/bash
+    set -e
+    echo "=== Checking format ==="
+    cargo fmt --all -- --check
+    echo "=== Running clippy ==="
+    cargo clippy --all-targets --all-features -- -D warnings
+    echo "=== Running check ==="
+    cargo check --all-targets --all-features
+    echo "=== Running tests ==="
+    cargo test --all-features
+    echo "=== Running audit ==="
+    cargo audit
+    echo "=== All checks passed! ==="

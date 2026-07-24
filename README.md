@@ -1,21 +1,13 @@
 ## TODO
 
-Left off
-
-- change the otp to use identifier so it can store email stuff to
-- maybe make a service for otp
-- make the create otp take in provider type and match so i can send sms/email for code
-- then rename the phone signup to just signup
-- add tests, and verify that all go green
-- use fable tokens to scan the solution for security vulnerabilities
-- add social for google and apple
-
 ### TODO
 
+- [ ] change email/phone fucntionality
 - [ ] expand the refresh tokens to have session as parent
 - [ ] fix all todos
 - [ ] rate limit refresh token with device id
 - [ ] create sqlx tests for all auth flows so they can be ran in the pipeline
+- [ ] social login with google and apple
 
 ### Auth / Security
 

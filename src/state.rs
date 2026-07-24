@@ -10,15 +10,15 @@ use crate::db::audit::delete_older_than;
 use crate::db::otp::delete_expired_otps;
 use crate::error::ServerError;
 use crate::models::auth::Claims;
-use crate::ports::comms::CommsPort;
 use crate::ports::crypto::CryptoPort;
 use crate::services::auth::AuthService;
+use crate::services::otp::OtpService;
 
 #[derive(Clone)]
 pub struct AppState {
     pool: Pool<Postgres>,
     pub auth: Arc<AuthService>,
-    pub comms: Arc<dyn CommsPort>,
+    pub otp: Arc<OtpService>,
     pub crypto: Arc<dyn CryptoPort>,
 }
 
@@ -26,13 +26,13 @@ impl AppState {
     pub fn new(
         pool: Pool<Postgres>,
         auth: Arc<AuthService>,
-        comms: Arc<dyn CommsPort>,
+        otp: Arc<OtpService>,
         crypto: Arc<dyn CryptoPort>,
     ) -> Self {
         Self {
             pool,
             auth,
-            comms,
+            otp,
             crypto,
         }
     }
