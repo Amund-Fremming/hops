@@ -2,10 +2,10 @@ import { Text, View } from "react-native";
 
 import { styles } from "./styles";
 
-export function AuthScreen() {
+export default function LoginScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Auth</Text>
+      <Text style={styles.title}>Login</Text>
     </View>
   );
 }
