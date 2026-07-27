@@ -76,7 +76,9 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.content}>
-          <LanguagePicker style={styles.languagePicker} />
+          <View style={styles.headerRow}>
+            <LanguagePicker style={styles.languagePickerAbsolute} />
+          </View>
 
           <Text style={[styles.title, { color: palette.text }]}>
             {t("login.title")}
@@ -171,10 +173,6 @@ export default function LoginScreen() {
               {t("login.forgot_password")}
             </Text>
           </Pressable>
-
-          <Text style={[styles.demoTip, { color: palette.textFaint }]}>
-            {t("login.demo_tip")}
-          </Text>
 
           <Pressable
             onPress={handleLogin}

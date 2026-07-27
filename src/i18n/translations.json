@@ -199,10 +199,6 @@
     "en": "Forgot password?",
     "no": "Glemt passord?"
   },
-  "login.demo_tip": {
-    "en": "Demo tip: password \"hops123\" logs in, anything else fails.",
-    "no": "Demo-tips: passordet \"hops123\" logger inn, alt annet feiler."
-  },
   "login.button": {
     "en": "Log in",
     "no": "Logg inn"

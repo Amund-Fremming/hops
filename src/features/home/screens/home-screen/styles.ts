@@ -1,5 +1,7 @@
 import { StyleSheet } from "react-native";
 
+import { moderateScale } from "@/lib/scaling";
+
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -7,7 +9,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 24,
+    fontSize: moderateScale(24),
     fontWeight: "600",
   },
 });
