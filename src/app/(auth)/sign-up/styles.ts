@@ -5,24 +5,29 @@ import { fonts } from "@/lib/theme";
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  inner: {
+    flex: 1,
     paddingTop: 32,
     paddingBottom: 24,
     paddingHorizontal: 28,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 36,
+  },
   dotsRow: {
     flexDirection: "row",
     gap: 6,
-    marginBottom: 36,
+  },
+  languagePickerAbsolute: {
+    position: "absolute",
+    right: 0,
   },
   dot: {
     height: 6,
     borderRadius: 3,
-  },
-  languagePicker: {
-    marginBottom: 20,
-  },
-  stepContainer: {
-    flex: 1,
   },
   title: {
     fontFamily: fonts.displayBold,
@@ -84,14 +89,6 @@ export const styles = StyleSheet.create({
   linkUnderline: {
     textDecorationLine: "underline",
   },
-  editLink: {
-    alignSelf: "flex-start",
-    marginBottom: 18,
-  },
-  editLinkText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16.5,
-  },
   otpRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -107,7 +104,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   resendRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     marginTop: 20,
   },
   nameRow: {
@@ -186,6 +183,16 @@ export const styles = StyleSheet.create({
   },
   continueButton: {
     marginTop: 32,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 20,
+  },
+  toggleText: {
+    fontFamily: fonts.body,
+    fontSize: 17,
   },
   verifyButton: {
     marginTop: 28,

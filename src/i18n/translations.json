@@ -3,41 +3,85 @@
     "en": "Verify it's you",
     "no": "Bekreft at det er deg"
   },
-  "otp.subtitle_input": {
-    "en": "Enter your email or phone number to receive a verification code",
-    "no": "Skriv inn e-post eller telefonnummer for å motta en verifiseringskode"
+  "otp.subtitle": {
+    "en": "We'll send a one-time code to confirm your identity.",
+    "no": "Vi sender deg en engangskode for å bekrefte identiteten din."
   },
-  "otp.subtitle_verify": {
-    "en": "Enter the code we sent to",
-    "no": "Skriv inn koden vi sendte til"
+  "otp.label_phone": {
+    "en": "Phone number",
+    "no": "Telefonnummer"
   },
-  "otp.placeholder_contact": {
-    "en": "Email or phone",
-    "no": "E-post eller telefon"
+  "otp.label_email": {
+    "en": "Email address",
+    "no": "E-postadresse"
   },
-  "otp.placeholder_code": {
-    "en": "Enter code",
-    "no": "Skriv inn kode"
+  "otp.placeholder_phone": {
+    "en": "555 55 555",
+    "no": "555 55 555"
   },
-  "otp.button_send": {
-    "en": "Send code",
-    "no": "Send kode"
+  "otp.placeholder_email": {
+    "en": "you@hops.com",
+    "no": "deg@hops.com"
+  },
+  "otp.use_email": {
+    "en": "Use email instead",
+    "no": "Bruk e-post i stedet"
+  },
+  "otp.use_phone": {
+    "en": "Use phone instead",
+    "no": "Bruk telefon i stedet"
+  },
+  "otp.button_continue": {
+    "en": "Continue",
+    "no": "Fortsett"
+  },
+  "otp.invalid_phone": {
+    "en": "Enter a valid phone number.",
+    "no": "Skriv inn et gyldig telefonnummer."
+  },
+  "otp.invalid_email": {
+    "en": "Enter a valid email address.",
+    "no": "Skriv inn en gyldig e-postadresse."
+  },
+  "otp.code_sent": {
+    "en": "Verification code sent.",
+    "no": "Verifiseringskode sendt."
+  },
+  "otp.edit": {
+    "en": "Edit",
+    "no": "Endre"
+  },
+  "otp.verify_title": {
+    "en": "Enter the code",
+    "no": "Skriv inn koden"
+  },
+  "otp.verify_subtitle": {
+    "en": "We sent a 6-digit code to",
+    "no": "Vi sendte en 6-sifret kode til"
   },
   "otp.button_verify": {
     "en": "Verify",
     "no": "Bekreft"
   },
+  "otp.resend_in": {
+    "en": "Resend code in",
+    "no": "Send kode på nytt om"
+  },
   "otp.button_resend": {
     "en": "Resend code",
     "no": "Send kode på nytt"
   },
-  "otp.invalid_contact": {
-    "en": "Please enter a valid email or phone number",
-    "no": "Vennligst skriv inn en gyldig e-post eller telefonnummer"
+  "otp.code_resent": {
+    "en": "A new code was sent.",
+    "no": "En ny kode ble sendt."
   },
-  "otp.send_failed": {
-    "en": "Failed to send verification code. Please try again",
-    "no": "Kunne ikke sende verifiseringskode. Prøv igjen"
+  "otp.error_incomplete": {
+    "en": "Enter all 6 digits.",
+    "no": "Skriv inn alle 6 sifrene."
+  },
+  "otp.error_incorrect": {
+    "en": "Incorrect code. Try again.",
+    "no": "Feil kode. Prøv igjen."
   },
   "otp.invalid_code": {
     "en": "Invalid verification code",
@@ -51,8 +95,128 @@
     "en": "Too many attempts. Please try again later",
     "no": "For mange forsøk. Prøv igjen senere"
   },
+  "otp.send_failed": {
+    "en": "Failed to send verification code. Please try again",
+    "no": "Kunne ikke sende verifiseringskode. Prøv igjen"
+  },
   "otp.verification_failed": {
     "en": "Verification failed. Please try again",
     "no": "Verifisering feilet. Prøv igjen"
+  },
+  "signup.title": {
+    "en": "Create your account",
+    "no": "Opprett kontoen din"
+  },
+  "signup.subtitle": {
+    "en": "Just a few details and you're in.",
+    "no": "Bare noen få detaljer, så er du i gang."
+  },
+  "signup.first_name": {
+    "en": "First name",
+    "no": "Fornavn"
+  },
+  "signup.last_name": {
+    "en": "Last name",
+    "no": "Etternavn"
+  },
+  "signup.password": {
+    "en": "Password",
+    "no": "Passord"
+  },
+  "signup.req_length": {
+    "en": "At least 8 characters",
+    "no": "Minst 8 tegn"
+  },
+  "signup.req_uppercase": {
+    "en": "One uppercase letter",
+    "no": "Én stor bokstav"
+  },
+  "signup.req_number": {
+    "en": "One number",
+    "no": "Ett tall"
+  },
+  "signup.button": {
+    "en": "Sign up",
+    "no": "Registrer deg"
+  },
+  "signup.error_name": {
+    "en": "Please enter your first and last name.",
+    "no": "Vennligst skriv inn for- og etternavn."
+  },
+  "signup.error_password_short": {
+    "en": "Password must be at least 8 characters.",
+    "no": "Passordet må ha minst 8 tegn."
+  },
+  "signup.error_password_rules": {
+    "en": "Password needs an uppercase letter and a number.",
+    "no": "Passordet må inneholde en stor bokstav og et tall."
+  },
+  "success.title": {
+    "en": "Welcome to hops",
+    "no": "Velkommen til hops"
+  },
+  "success.subtitle": {
+    "en": "Your account is ready to go.",
+    "no": "Kontoen din er klar."
+  },
+  "success.button": {
+    "en": "Enter app",
+    "no": "Gå til appen"
+  },
+  "success.toast": {
+    "en": "Welcome to hops!",
+    "no": "Velkommen til hops!"
+  },
+  "auth.have_account": {
+    "en": "Already have an account?",
+    "no": "Har du allerede en konto?"
+  },
+  "auth.log_in": {
+    "en": "Log in",
+    "no": "Logg inn"
+  },
+  "auth.no_account": {
+    "en": "Don't have an account?",
+    "no": "Har du ikke en konto?"
+  },
+  "auth.sign_up": {
+    "en": "Sign up",
+    "no": "Registrer deg"
+  },
+  "login.title": {
+    "en": "Welcome back",
+    "no": "Velkommen tilbake"
+  },
+  "login.subtitle": {
+    "en": "Log in to your hops account.",
+    "no": "Logg inn på hops-kontoen din."
+  },
+  "login.placeholder_phone": {
+    "en": "555 555 5555",
+    "no": "555 55 555"
+  },
+  "login.forgot_password": {
+    "en": "Forgot password?",
+    "no": "Glemt passord?"
+  },
+  "login.demo_tip": {
+    "en": "Demo tip: password \"hops123\" logs in, anything else fails.",
+    "no": "Demo-tips: passordet \"hops123\" logger inn, alt annet feiler."
+  },
+  "login.button": {
+    "en": "Log in",
+    "no": "Logg inn"
+  },
+  "login.error_password_required": {
+    "en": "Please enter your password.",
+    "no": "Vennligst skriv inn passordet ditt."
+  },
+  "login.error_invalid_credentials": {
+    "en": "Invalid credentials. Please try again.",
+    "no": "Ugyldig innlogging. Prøv igjen."
+  },
+  "login.success": {
+    "en": "Welcome back!",
+    "no": "Velkommen tilbake!"
   }
 }
