@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { LanguagePicker } from "@/components";
 import { usePalette, useToast } from "@/hooks";
 
 import { styles } from "./styles";
@@ -247,6 +248,8 @@ export function OtpFlow({ onComplete }: OtpFlowProps) {
           ))}
         </View>
       )}
+
+      {step !== "success" && <LanguagePicker style={styles.languagePicker} />}
 
       <Animated.View
         style={[

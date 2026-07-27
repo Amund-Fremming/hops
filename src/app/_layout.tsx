@@ -3,7 +3,7 @@ import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 
 import { SessionProvider, useSession } from "@/features/auth";
-import { ThemeProvider, ToastProvider } from "@/hooks";
+import { LanguageProvider, ThemeProvider, ToastProvider } from "@/hooks";
 
 const appFonts = {
   "SpaceGrotesk-SemiBold": require("../../assets/fonts/SpaceGrotesk-SemiBold.ttf"),
@@ -44,11 +44,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <ToastProvider>
-        <SessionProvider>
-          <RootLayoutNav />
-        </SessionProvider>
-      </ToastProvider>
+      <LanguageProvider>
+        <ToastProvider>
+          <SessionProvider>
+            <RootLayoutNav />
+          </SessionProvider>
+        </ToastProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

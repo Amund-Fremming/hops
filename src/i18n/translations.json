@@ -1,0 +1,58 @@
+{
+  "otp.title": {
+    "en": "Verify it's you",
+    "no": "Bekreft at det er deg"
+  },
+  "otp.subtitle_input": {
+    "en": "Enter your email or phone number to receive a verification code",
+    "no": "Skriv inn e-post eller telefonnummer for å motta en verifiseringskode"
+  },
+  "otp.subtitle_verify": {
+    "en": "Enter the code we sent to",
+    "no": "Skriv inn koden vi sendte til"
+  },
+  "otp.placeholder_contact": {
+    "en": "Email or phone",
+    "no": "E-post eller telefon"
+  },
+  "otp.placeholder_code": {
+    "en": "Enter code",
+    "no": "Skriv inn kode"
+  },
+  "otp.button_send": {
+    "en": "Send code",
+    "no": "Send kode"
+  },
+  "otp.button_verify": {
+    "en": "Verify",
+    "no": "Bekreft"
+  },
+  "otp.button_resend": {
+    "en": "Resend code",
+    "no": "Send kode på nytt"
+  },
+  "otp.invalid_contact": {
+    "en": "Please enter a valid email or phone number",
+    "no": "Vennligst skriv inn en gyldig e-post eller telefonnummer"
+  },
+  "otp.send_failed": {
+    "en": "Failed to send verification code. Please try again",
+    "no": "Kunne ikke sende verifiseringskode. Prøv igjen"
+  },
+  "otp.invalid_code": {
+    "en": "Invalid verification code",
+    "no": "Ugyldig verifiseringskode"
+  },
+  "otp.code_expired": {
+    "en": "Verification code has expired. Please request a new one",
+    "no": "Verifiseringskoden har utløpt. Vennligst be om en ny"
+  },
+  "otp.too_many_attempts": {
+    "en": "Too many attempts. Please try again later",
+    "no": "For mange forsøk. Prøv igjen senere"
+  },
+  "otp.verification_failed": {
+    "en": "Verification failed. Please try again",
+    "no": "Verifisering feilet. Prøv igjen"
+  }
+}

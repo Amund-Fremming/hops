@@ -18,6 +18,9 @@ export const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
+  languagePicker: {
+    marginBottom: 20,
+  },
   stepContainer: {
     flex: 1,
   },

@@ -7,7 +7,8 @@
       "Bash(curl -s -o Manrope-SemiBold.ttf \"https://fonts.gstatic.com/s/manrope/v20/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk4jE-_F.ttf\")",
       "Bash(curl -s -o Manrope-Bold.ttf \"https://fonts.gstatic.com/s/manrope/v20/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk4aE-_F.ttf\")",
       "Bash(curl -s -o Manrope-ExtraBold.ttf \"https://fonts.gstatic.com/s/manrope/v20/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk59E-_F.ttf\")",
-      "Bash(curl -s -o SpaceGrotesk-Medium.ttf \"https://fonts.gstatic.com/s/spacegrotesk/v22/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUUsj.ttf\")"
+      "Bash(curl -s -o SpaceGrotesk-Medium.ttf \"https://fonts.gstatic.com/s/spacegrotesk/v22/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUUsj.ttf\")",
+      "Bash(npx prettier *)"
     ]
   },
   "enabledPlugins": {
