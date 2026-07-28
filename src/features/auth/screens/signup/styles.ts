@@ -24,7 +24,7 @@ export const styles = StyleSheet.create({
   },
   languagePickerAbsolute: {
     position: "absolute",
-    top: verticalScale(-20),
+    top: 0,
     right: 0,
   },
   dot: {

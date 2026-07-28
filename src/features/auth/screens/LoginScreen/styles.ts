@@ -48,6 +48,7 @@ export const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: moderateScale(16.5),
     letterSpacing: 0.5,
+    marginBottom: verticalScale(10),
   },
   switchText: {
     fontFamily: fonts.bodySemiBold,
@@ -84,7 +85,7 @@ export const styles = StyleSheet.create({
     minWidth: 0,
   },
   passwordWrapper: {
-    marginTop: verticalScale(16),
+    marginTop: verticalScale(20),
   },
   passwordInput: {
     paddingRight: horizontalScale(44),

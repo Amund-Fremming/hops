@@ -1,19 +1,21 @@
 import type { ReactNode } from "react";
 import { createContext, useContext, useState } from "react";
 
-type Method = "phone" | "email";
+import type { ProviderType } from "./types";
 
 interface SignupState {
-  method: Method;
+  method: ProviderType;
   identifier: string;
+  otpId: string;
   firstName: string;
   lastName: string;
   password: string;
 }
 
 interface SignupContextValue extends SignupState {
-  setMethod: (m: Method) => void;
+  setMethod: (m: ProviderType) => void;
   setIdentifier: (v: string) => void;
+  setOtpId: (v: string) => void;
   setFirstName: (v: string) => void;
   setLastName: (v: string) => void;
   setPassword: (v: string) => void;
@@ -23,6 +25,7 @@ interface SignupContextValue extends SignupState {
 const initial: SignupState = {
   method: "phone",
   identifier: "",
+  otpId: "",
   firstName: "",
   lastName: "",
   password: "",
@@ -37,6 +40,7 @@ export function SignupProvider({ children }: { children: ReactNode }) {
     ...state,
     setMethod: (method) => setState((s) => ({ ...s, method, identifier: "" })),
     setIdentifier: (identifier) => setState((s) => ({ ...s, identifier })),
+    setOtpId: (otpId) => setState((s) => ({ ...s, otpId })),
     setFirstName: (firstName) => setState((s) => ({ ...s, firstName })),
     setLastName: (lastName) => setState((s) => ({ ...s, lastName })),
     setPassword: (password) => setState((s) => ({ ...s, password })),

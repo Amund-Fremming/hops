@@ -103,6 +103,34 @@
     "en": "Verification failed. Please try again",
     "no": "Verifisering feilet. Prøv igjen"
   },
+  "otp.already_verified": {
+    "en": "This code has already been used",
+    "no": "Denne koden er allerede brukt"
+  },
+  "otp.not_found": {
+    "en": "Verification code not found. Please request a new one",
+    "no": "Verifiseringskode ikke funnet. Vennligst be om en ny"
+  },
+  "otp.too_many_messages": {
+    "en": "Too many codes requested. Please wait before trying again",
+    "no": "For mange koder forespurt. Vent før du prøver igjen"
+  },
+  "error.validation_failed": {
+    "en": "Please check your input and try again",
+    "no": "Vennligst sjekk inndataene dine og prøv igjen"
+  },
+  "error.password_same_as_old": {
+    "en": "New password cannot be the same as the old password",
+    "no": "Nytt passord kan ikke være det samme som det gamle"
+  },
+  "error.network": {
+    "en": "Network error. Please check your connection",
+    "no": "Nettverksfeil. Sjekk tilkoblingen din"
+  },
+  "error.unknown": {
+    "en": "Something went wrong. Please try again",
+    "no": "Noe gikk galt. Prøv igjen"
+  },
   "signup.title": {
     "en": "Create your account",
     "no": "Opprett kontoen din"
@@ -176,8 +204,8 @@
     "no": "Logg inn"
   },
   "auth.no_account": {
-    "en": "Don't have an account?",
-    "no": "Har du ikke en konto?"
+    "en": "Need an account?",
+    "no": "Trenger du en konto?"
   },
   "auth.sign_up": {
     "en": "Sign up",
@@ -191,9 +219,17 @@
     "en": "Log in to your hops account.",
     "no": "Logg inn på hops-kontoen din."
   },
-  "login.placeholder_phone": {
-    "en": "555 555 5555",
-    "no": "555 55 555"
+  "login.label_phone_or_email": {
+    "en": "Phone or email",
+    "no": "Telefon eller e-post"
+  },
+  "login.placeholder_phone_or_email": {
+    "en": "555 555 5555 or you@hops.com",
+    "no": "555 55 555 eller deg@hops.com"
+  },
+  "login.error_invalid_input": {
+    "en": "Enter a valid phone number or email.",
+    "no": "Skriv inn et gyldig telefonnummer eller e-post."
   },
   "login.forgot_password": {
     "en": "Forgot password?",
@@ -214,5 +250,9 @@
   "login.success": {
     "en": "Welcome back!",
     "no": "Velkommen tilbake!"
+  },
+  "error.PASSWORD_SAME_AS_OLD": {
+    "en": "New password cannot be the same as your current password.",
+    "no": "Nytt passord kan ikke være det samme som ditt nåværende passord."
   }
 }

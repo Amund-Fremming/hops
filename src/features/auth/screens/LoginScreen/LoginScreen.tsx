@@ -11,24 +11,24 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LanguagePicker } from "@/components";
+import { ApiError } from "@/features/auth/api";
+import { useSession } from "@/features/auth/session-context";
+import { errorCodeToTranslationKey } from "@/features/auth/types";
 import { usePalette, useToast, useTranslation } from "@/hooks";
 
 import { styles } from "./styles";
-
-type Method = "phone" | "email";
-const PHONE_PREFIX = "+47";
-const DEMO_PASSWORD = "hops123";
 
 export default function LoginScreen() {
   const palette = usePalette();
   const { showError, showSuccess } = useToast();
   const { t } = useTranslation();
   const router = useRouter();
+  const { login } = useSession();
 
-  const [method, setMethod] = useState<Method>("phone");
-  const [value, setValue] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const inputTheme = {
     backgroundColor: palette.inputBg,
@@ -36,22 +36,13 @@ export default function LoginScreen() {
     color: palette.text,
   };
 
-  const handleSwitchMethod = () => {
-    setMethod((m) => (m === "phone" ? "email" : "phone"));
-    setValue("");
-  };
+  const handleLogin = async () => {
+    const trimmed = identifier.trim();
+    const isPhone = /^\+?\d[\d\s-]{6,}$/.test(trimmed);
+    const isEmail = /^\S+@\S+\.\S+$/.test(trimmed);
 
-  const handleLogin = () => {
-    const trimmed = value.trim();
-    const isValid =
-      method === "phone"
-        ? trimmed.replace(/\D/g, "").length >= 8
-        : /^\S+@\S+\.\S+$/.test(trimmed);
-
-    if (!isValid) {
-      showError(
-        method === "phone" ? t("otp.invalid_phone") : t("otp.invalid_email"),
-      );
+    if (!isPhone && !isEmail) {
+      showError(t("login.error_invalid_input"));
       return;
     }
 
@@ -60,13 +51,23 @@ export default function LoginScreen() {
       return;
     }
 
-    if (password !== DEMO_PASSWORD) {
-      showError(t("login.error_invalid_credentials"));
-      return;
-    }
+    const providerType = isEmail ? "email" : "phone";
 
-    showSuccess(t("login.success"));
-    // TODO: call login API and start session
+    setIsLoading(true);
+    try {
+      await login(trimmed, password, providerType);
+      showSuccess(t("login.success"));
+      router.replace("/");
+    } catch (err) {
+      if (err instanceof ApiError && err.code) {
+        const key = errorCodeToTranslationKey[err.code];
+        showError(key ? t(key) : err.message);
+      } else {
+        showError(t("login.error_invalid_credentials"));
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -87,60 +88,20 @@ export default function LoginScreen() {
             {t("login.subtitle")}
           </Text>
 
-          <View style={styles.labelRow}>
-            <Text style={[styles.fieldLabel, { color: palette.textFaint }]}>
-              {method === "phone" ? t("otp.label_phone") : t("otp.label_email")}
-            </Text>
-            <Pressable onPress={handleSwitchMethod} hitSlop={8}>
-              <Text
-                style={[
-                  styles.switchText,
-                  styles.linkUnderline,
-                  { color: palette.textMuted },
-                ]}
-              >
-                {method === "phone" ? t("otp.use_email") : t("otp.use_phone")}
-              </Text>
-            </Pressable>
-          </View>
+          <Text style={[styles.fieldLabel, { color: palette.textFaint }]}>
+            {t("login.label_phone_or_email")}
+          </Text>
 
-          {method === "phone" ? (
-            <View style={styles.phoneRow}>
-              <View
-                style={[
-                  styles.prefixPill,
-                  {
-                    backgroundColor: palette.inputBg,
-                    borderColor: palette.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.prefixText, { color: palette.textMuted }]}>
-                  {PHONE_PREFIX}
-                </Text>
-              </View>
-              <TextInput
-                style={[styles.input, styles.rowInput, inputTheme]}
-                value={value}
-                onChangeText={setValue}
-                placeholder={t("login.placeholder_phone")}
-                placeholderTextColor={palette.textFaint}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-              />
-            </View>
-          ) : (
-            <TextInput
-              style={[styles.input, inputTheme]}
-              value={value}
-              onChangeText={setValue}
-              placeholder={t("otp.placeholder_email")}
-              placeholderTextColor={palette.textFaint}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
-          )}
+          <TextInput
+            style={[styles.input, inputTheme]}
+            value={identifier}
+            onChangeText={setIdentifier}
+            placeholder={t("login.placeholder_phone_or_email")}
+            placeholderTextColor={palette.textFaint}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="username"
+          />
 
           <View style={styles.passwordWrapper}>
             <TextInput
@@ -176,15 +137,19 @@ export default function LoginScreen() {
 
           <Pressable
             onPress={handleLogin}
+            disabled={isLoading}
             style={({ pressed }) => [
               styles.primaryButton,
-              { backgroundColor: palette.accent, opacity: pressed ? 0.85 : 1 },
+              {
+                backgroundColor: palette.accent,
+                opacity: isLoading ? 0.6 : pressed ? 0.85 : 1,
+              },
             ]}
           >
             <Text
               style={[styles.primaryButtonText, { color: palette.accentText }]}
             >
-              {t("login.button")}
+              {isLoading ? "..." : t("login.button")}
             </Text>
           </Pressable>
 

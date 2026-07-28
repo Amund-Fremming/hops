@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-import { loginRequest, logoutRequest } from "./api";
-import { getDeviceId } from "./device";
+import { login as loginApi, logout as logoutApi } from "./api";
+import { getDeviceId, getDeviceName } from "./device";
 import {
   clearSession,
   getHasLoggedInBefore,
@@ -10,14 +10,21 @@ import {
   setHasLoggedInBefore,
   storeSession,
 } from "./token-storage";
-import type { AuthSession } from "./types";
+import {
+  tokenResponseToSession,
+  type AuthSession,
+  type ProviderType,
+} from "./types";
 
 interface SessionContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   hasLoggedInBefore: boolean;
-  userId: string | null;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (
+    identifier: string,
+    password: string,
+    providerType: ProviderType,
+  ) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -37,19 +44,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = async (identifier: string, password: string) => {
+  const login = async (
+    identifier: string,
+    password: string,
+    providerType: ProviderType,
+  ) => {
     const deviceId = await getDeviceId();
-    const res = await loginRequest(identifier, password, deviceId);
+    const deviceName = await getDeviceName();
 
-    const newSession: AuthSession = {
-      accessToken: res.accessToken,
-      accessTokenExpiresAt: res.accessTokenExpiresAt,
-      refreshToken: res.refreshToken,
-      refreshTokenExpiresAt: res.refreshTokenExpiresAt,
-      userId: res.userId,
-      deviceId,
-    };
+    const res = await loginApi({
+      device_id: deviceId,
+      device_name: deviceName,
+      provider_type: providerType,
+      identifier,
+      password,
+    });
 
+    const newSession = tokenResponseToSession(res, deviceId);
     await storeSession(newSession);
     await setHasLoggedInBefore();
     setSession(newSession);
@@ -58,9 +69,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     if (session) {
-      await logoutRequest(session.accessToken, session.deviceId).catch(
-        () => {},
-      );
+      await logoutApi(session.accessToken, {
+        device_id: session.deviceId,
+      }).catch(() => {});
     }
     await clearSession();
     setSession(null);
@@ -68,7 +79,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = useMemo(() => {
     if (!session) return false;
-    return Date.now() < session.refreshTokenExpiresAt;
+    return Date.now() < session.refreshExpiresAt;
   }, [session]);
 
   const value = useMemo<SessionContextValue>(
@@ -76,11 +87,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       isAuthenticated,
       isLoading,
       hasLoggedInBefore,
-      userId: session?.userId ?? null,
       login,
       logout,
     }),
-    [isAuthenticated, isLoading, hasLoggedInBefore, session?.userId],
+    [isAuthenticated, isLoading, hasLoggedInBefore],
   );
 
   return (
